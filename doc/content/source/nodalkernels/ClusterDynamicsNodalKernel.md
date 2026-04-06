@@ -56,7 +56,15 @@ Off-diagonal entries (coupling of the monomer equation to $C_n$ for $n \geq 2$):
 Coupling to the monomer column:
 
 !equation
-\frac{\partial F_i}{\partial C_1} = -\beta_{n-1} C_{n-1} - \beta_n C_n + \begin{cases} \beta_1 C_1 & n = 2 \\ \beta_{n-1} C_{n-1} & n > 2 \end{cases}
+\frac{\partial F_i}{\partial C_1} =
+\begin{cases}
+-\beta_1 C_1 + \beta_2 C_2 & n = 2 \\
+-\beta_{n-1} C_{n-1} + \beta_n C_n & n > 2
+\end{cases}
+
+This piecewise form is the derivative of the residual
+$F_i = -(\dot{C}_n^{\text{in}} - \beta_n C_1 C_n + \alpha_{n+1} C_{n+1} - \alpha_n C_n)$
+with respect to the monomer concentration $C_1$.
 
 Lower-diagonal entry (coupling to cluster $n-1$, for $n > 2$):
 
