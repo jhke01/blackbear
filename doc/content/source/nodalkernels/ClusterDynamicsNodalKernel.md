@@ -4,7 +4,7 @@
 
 ## Description
 
-The `ClusterDynamicsNodalKernel` implements the complete cluster dynamics rate equations for all cluster sizes (1 through N) in a +single array variable+.
+The `ClusterDynamicsNodalKernel` implements the complete cluster dynamics rate equations for all cluster sizes (1 through N) in a +single array variable+. The rate coefficients can be supplied by either a simple power-law model or an interfacial-energy model based on cluster geometry and detailed balance for a single diffusing species.
 
 !alert note title=Nodal Array Indexing
 Array component index $i$ corresponds to cluster size $n = i+1$, i.e. monomer ($n=1$) array index is $i=0$; dimer ($n=2$) array index is $i=1$.  Largest cluster ($n=N$) array index is $i=N-1$.
@@ -30,12 +30,42 @@ where the growth-in term is:
 
 For $n = 2$, this reduces to $\beta_1 C_1^2$ because $C_{n-1} = C_1$.
 
-Absorption and emission rate coefficients scale with the cluster surface area:
+The rate coefficients depend on the selected [!param](/NodalKernels/ClusterDynamicsNodalKernel/rate_model).
 
 !equation
 \beta_n = \beta_0 n^{1/3}, \qquad \alpha_n = \alpha_0 n^{1/3}
 
-where $\beta_0$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/beta0)) and $\alpha_0$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/alpha0)) are base coefficients.
+For `rate_model = simple`, $\beta_0$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/beta0)) and $\alpha_0$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/alpha0)) are user-supplied base coefficients.
+
+For `rate_model = interfacial_energy`, the absorption coefficient is computed from the cluster geometry and monomer diffusivity:
+
+!equation
+V_{at} = \text{atomic volume}, \qquad r_n = \left(\frac{3 n V_{at}}{4\pi}\right)^{1/3}
+
+!equation
+\beta_n = \frac{4\pi (r_1 + r_n) D_m}{V_{at}}
+
+where $V_{at}$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/atomic_volume)) is the atomic volume and $D_m$ is the monomer diffusivity. The diffusivity is selected by [!param](/NodalKernels/ClusterDynamicsNodalKernel/diffusivity_model), which is used only when `rate_model = interfacial_energy`:
+
+!equation
+D_m = \text{monomer diffusivity}
+
+for `diffusivity_model = constant`, where $D_m$ is supplied directly by [!param](/NodalKernels/ClusterDynamicsNodalKernel/monomer_diffusivity).
+
+!equation
+D_m = D_0 \exp\left(-\frac{Q}{k_B T}\right)
+
+for `diffusivity_model = arrhenius`, where $D_0$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/D0)) is the diffusion prefactor and $Q$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/Q)) is the activation energy.
+
+The emission coefficient is then derived by detailed balance using the cluster binding energy:
+
+!equation
+\alpha_n = \beta_{n-1}\exp\left(-\frac{E_n^b}{k_B T}\right), \qquad n \geq 2
+
+!equation
+E_n^b = \Omega - T\Delta S - (36\pi)^{1/3}V_{at}^{2/3}\sigma\left[n^{2/3} - (n-1)^{2/3}\right]
+
+where $T$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/temperature)) is the temperature, $\sigma$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/sigma)) is the interfacial energy, $\Omega$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/Omega)) is the enthalpy term, and $\Delta S$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/DeltaS)) is the non-configurational entropy term.
 
 ### Intra-Variable Jacobian
 
@@ -66,7 +96,7 @@ Coupling to the monomer column:
 
 This piecewise form is the derivative of the residual
 $F_i = -(\dot{C}_n^{\text{in}} - \beta_n C_1 C_n + \alpha_{n+1} C_{n+1} - \alpha_n C_n)$
-with respect to the monomer concentration $C_1$.
+with respect to the monomer concentration $C_1$. The Jacobian expressions retain the same form for both rate models because $\beta_n$ and $\alpha_n$ depend on cluster size and user-specified parameters, but not on the solution variables themselves.
 
 Lower-diagonal entry (coupling to cluster $n-1$, for $n > 2$):
 

@@ -15,6 +15,13 @@
 #include "GenericClusterDynamicsNodalKernel.h"
 #include "FEProblemBase.h"
 
+#include "libmesh/libmesh_common.h"
+
+namespace
+{
+constexpr Real kB = 1.380649e-23;
+}
+
 registerMooseObject("BlackBearApp", ClusterDynamicsNodalKernel);
 registerMooseObject("BlackBearApp", ADClusterDynamicsNodalKernel);
 
@@ -23,13 +30,49 @@ InputParameters
 GenericClusterDynamicsNodalKernelTempl<is_ad>::validParams()
 {
   InputParameters params = GenericArrayNodalKernel<is_ad>::validParams();
+  MooseEnum rate_model("simple interfacial_energy", "simple");
+  MooseEnum diffusivity_model("constant arrhenius", "constant");
   params.addClassDescription(
-      "Cluster dynamics nodal kernel for all cluster sizes (1 through N) "
-      "in a single array variable. Array index i corresponds to cluster size n = i+1.");
+      "Cluster dynamics nodal kernel for all cluster sizes (1 through N) in a single "
+      "array variable. Array index i corresponds to cluster size n = i+1.");
   params.addRequiredParam<Real>("generation", "Monomer generation rate G_1");
   params.addRequiredParam<Real>("sink", "Linear sink coefficient k_s for monomer loss");
-  params.addRequiredParam<Real>("beta0", "Base absorption coefficient in beta_n = beta0*n^(1/3)");
-  params.addRequiredParam<Real>("alpha0", "Base emission coefficient in alpha_n = alpha0*n^(1/3)");
+  params.addParam<MooseEnum>(
+      "rate_model",
+      rate_model,
+      "Rate-coefficient model. 'simple' uses beta_n = beta0*n^(1/3) and "
+      "alpha_n = alpha0*n^(1/3); 'interfacial_energy' derives coefficients from "
+      "cluster geometry, interfacial energy, and detailed balance.");
+  params.addParam<MooseEnum>(
+      "diffusivity_model",
+      diffusivity_model,
+      "Diffusivity model used only when rate_model = interfacial_energy. "
+      "'constant' uses monomer_diffusivity directly, while 'arrhenius' computes "
+      "the diffusivity from D0, Q, and temperature.");
+  params.addParam<Real>(
+      "beta0", 0.0, "Base absorption coefficient for rate_model = simple.");
+  params.addParam<Real>(
+      "alpha0", 0.0, "Base emission coefficient for rate_model = simple.");
+  params.addParam<Real>(
+      "temperature", 0.0, "Temperature T [K] for the interfacial-energy rate model.");
+  params.addParam<Real>(
+      "monomer_diffusivity",
+      0.0,
+      "Monomer diffusion coefficient [m^2/s] for diffusivity_model = constant.");
+  params.addParam<Real>(
+      "D0", 0.0, "Diffusion prefactor D0 [m^2/s] for diffusivity_model = arrhenius.");
+  params.addParam<Real>(
+      "Q", 0.0, "Activation energy Q [J] for diffusivity_model = arrhenius.");
+  params.addParam<Real>(
+      "sigma", 0.0, "Interfacial energy sigma [J/m^2] for the interfacial-energy model.");
+  params.addParam<Real>(
+      "atomic_volume", 0.0, "Atomic volume V_at [m^3] for the interfacial-energy model.");
+  params.addParam<Real>(
+      "Omega", 0.0, "Enthalpy term Omega [J] for the interfacial-energy model.");
+  params.addParam<Real>(
+      "DeltaS",
+      0.0,
+      "Non-configurational entropy term DeltaS [J/K] for the interfacial-energy model.");
   return params;
 }
 
@@ -39,25 +82,121 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::GenericClusterDynamicsNodalKernel
   : GenericArrayNodalKernel<is_ad>(parameters),
     _generation(this->template getParam<Real>("generation")),
     _sink(this->template getParam<Real>("sink")),
+    _rate_model(this->template getParam<MooseEnum>("rate_model")
+                    .template getEnum<RateModel>()),
     _beta0(this->template getParam<Real>("beta0")),
-    _alpha0(this->template getParam<Real>("alpha0"))
+    _alpha0(this->template getParam<Real>("alpha0")),
+    _temperature(this->template getParam<Real>("temperature")),
+    _monomer_diffusivity(this->template getParam<Real>("monomer_diffusivity")),
+    _diffusivity_model(this->template getParam<MooseEnum>("diffusivity_model")
+                           .template getEnum<DiffusivityModel>()),
+    _D0(this->template getParam<Real>("D0")),
+    _Q(this->template getParam<Real>("Q")),
+    _sigma(this->template getParam<Real>("sigma")),
+    _atomic_volume(this->template getParam<Real>("atomic_volume")),
+    _Omega(this->template getParam<Real>("Omega")),
+    _DeltaS(this->template getParam<Real>("DeltaS"))
 {
   if (!(this->_fe_problem.useHashTableMatrixAssembly()))
     mooseError("ClusterDynamicsNodalKernel requires Problem/use_hash_table_matrix_assembly = true");
+
+  if (_rate_model == RateModel::SIMPLE)
+  {
+    if (_beta0 <= 0.0)
+      mooseError("ClusterDynamicsNodalKernel with rate_model = simple requires beta0 > 0.");
+    if (_alpha0 <= 0.0)
+      mooseError("ClusterDynamicsNodalKernel with rate_model = simple requires alpha0 > 0.");
+  }
+  else
+  {
+    if (_temperature <= 0.0)
+      mooseError(
+          "ClusterDynamicsNodalKernel with rate_model = interfacial_energy requires temperature > 0.");
+    if (_diffusivity_model == DiffusivityModel::CONSTANT)
+    {
+      if (_monomer_diffusivity <= 0.0)
+        mooseError("ClusterDynamicsNodalKernel with rate_model = interfacial_energy and "
+                   "diffusivity_model = constant requires monomer_diffusivity > 0.");
+    }
+    else
+    {
+      if (_D0 <= 0.0)
+        mooseError("ClusterDynamicsNodalKernel with rate_model = interfacial_energy and "
+                   "diffusivity_model = arrhenius requires D0 > 0.");
+      if (_Q <= 0.0)
+        mooseError("ClusterDynamicsNodalKernel with rate_model = interfacial_energy and "
+                   "diffusivity_model = arrhenius requires Q > 0.");
+    }
+    if (_sigma <= 0.0)
+      mooseError(
+          "ClusterDynamicsNodalKernel with rate_model = interfacial_energy requires sigma > 0.");
+    if (_atomic_volume <= 0.0)
+      mooseError(
+          "ClusterDynamicsNodalKernel with rate_model = interfacial_energy requires atomic_volume > 0.");
+  }
 }
 
 template <bool is_ad>
 Real
 GenericClusterDynamicsNodalKernelTempl<is_ad>::beta(const unsigned int n) const
 {
-  return _beta0 * std::cbrt(static_cast<Real>(n));
+  if (_rate_model == RateModel::SIMPLE)
+    return _beta0 * std::cbrt(static_cast<Real>(n));
+
+  return 4.0 * libMesh::pi * (radius(1) + radius(n)) * monomerDiffusivity() / atomicVolume();
 }
 
 template <bool is_ad>
 Real
 GenericClusterDynamicsNodalKernelTempl<is_ad>::alpha(const unsigned int n) const
 {
-  return _alpha0 * std::cbrt(static_cast<Real>(n));
+  if (_rate_model == RateModel::SIMPLE)
+    return _alpha0 * std::cbrt(static_cast<Real>(n));
+
+  if (n <= 1)
+    mooseError("alpha(n) is only defined for cluster sizes n >= 2 in interfacial_energy mode.");
+
+  return beta(n - 1) * std::exp(-bindingEnergy(n) / (kB * _temperature));
+}
+
+template <bool is_ad>
+Real
+GenericClusterDynamicsNodalKernelTempl<is_ad>::atomicVolume() const
+{
+  return _atomic_volume;
+}
+
+template <bool is_ad>
+Real
+GenericClusterDynamicsNodalKernelTempl<is_ad>::monomerDiffusivity() const
+{
+  if (_diffusivity_model == DiffusivityModel::CONSTANT)
+    return _monomer_diffusivity;
+
+  return _D0 * std::exp(-_Q / (kB * _temperature));
+}
+
+template <bool is_ad>
+Real
+GenericClusterDynamicsNodalKernelTempl<is_ad>::radius(const unsigned int n) const
+{
+  return std::cbrt(3.0 * static_cast<Real>(n) * atomicVolume() / (4.0 * libMesh::pi));
+}
+
+template <bool is_ad>
+Real
+GenericClusterDynamicsNodalKernelTempl<is_ad>::bindingEnergy(const unsigned int n) const
+{
+  if (n <= 1)
+    mooseError(
+        "bindingEnergy(n) is only defined for cluster sizes n >= 2 in interfacial_energy mode.");
+
+  const Real surface_prefactor =
+      std::cbrt(36.0 * libMesh::pi) * std::pow(atomicVolume(), 2.0 / 3.0) * _sigma;
+  return _Omega - _temperature * _DeltaS -
+         surface_prefactor *
+             (std::pow(static_cast<Real>(n), 2.0 / 3.0) -
+              std::pow(static_cast<Real>(n - 1), 2.0 / 3.0));
 }
 
 template <bool is_ad>
@@ -92,7 +231,7 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::computeQpResidual(
   // Components i >= 1: cluster size n = i+1 >= 2
   // dC_n/dt = growth_in - growth_out + emit_in - emit_out
   // where:
-  //   This form follows the Cu precipitation flux definition and preserves mass:
+  //   This form follows the single-species cluster flux definition and preserves mass:
   //   dC_n/dt = J_{n-1->n} - J_{n->n+1}, with
   //   J_{n->n+1} = beta(n)*C_1*C_n - alpha(n+1)*C_{n+1}. For n=2,
   //   J_{1->2} = beta(1)*C_1^2 - alpha(2)*C_2, so the absorption term is

@@ -15,6 +15,7 @@
 #pragma once
 
 #include "GenericArrayNodalKernel.h"
+#include "MooseEnum.h"
 
 /**
  * Combined cluster dynamics array nodal kernel for all cluster sizes (1 through N).
@@ -36,6 +37,18 @@ template <bool is_ad>
 class GenericClusterDynamicsNodalKernelTempl : public GenericArrayNodalKernel<is_ad>
 {
 public:
+  enum class RateModel
+  {
+    SIMPLE = 0,
+    INTERFACIAL_ENERGY = 1
+  };
+
+  enum class DiffusivityModel
+  {
+    CONSTANT = 0,
+    ARRHENIUS = 1
+  };
+
   static InputParameters validParams();
   GenericClusterDynamicsNodalKernelTempl(const InputParameters & parameters);
 
@@ -43,11 +56,23 @@ protected:
   virtual void computeQpResidual(GenericRealEigenVector<is_ad> & residual) override;
   virtual void computeQpJacobian() override;
 
-  /// Absorption rate coefficient: beta(n) = beta0 * n^(1/3)
+  /// Absorption rate coefficient for the selected rate model
   Real beta(unsigned int n) const;
 
-  /// Emission rate coefficient: alpha(n) = alpha0 * n^(1/3)
+  /// Emission rate coefficient for the selected rate model
   Real alpha(unsigned int n) const;
+
+  /// Atomic volume used by the interfacial-energy model
+  Real atomicVolume() const;
+
+  /// Monomer diffusivity used by the interfacial-energy model
+  Real monomerDiffusivity() const;
+
+  /// Radius of a cluster of size n used by the interfacial-energy model
+  Real radius(unsigned int n) const;
+
+  /// Binding energy for a cluster of size n used by the interfacial-energy model
+  Real bindingEnergy(unsigned int n) const;
 
   /// Monomer generation rate G_1
   const Real _generation;
@@ -55,11 +80,41 @@ protected:
   /// Linear sink coefficient k_s
   const Real _sink;
 
-  /// Base absorption coefficient beta_0
+  /// Selected rate model
+  const RateModel _rate_model;
+
+  /// Base absorption coefficient beta_0 for the simple model
   const Real _beta0;
 
-  /// Base emission coefficient alpha_0
+  /// Base emission coefficient alpha_0 for the simple model
   const Real _alpha0;
+
+  /// Temperature T for the interfacial-energy model
+  const Real _temperature;
+
+  /// Monomer diffusion coefficient for the interfacial-energy model
+  const Real _monomer_diffusivity;
+
+  /// Selected diffusivity model for the interfacial-energy rate model
+  const DiffusivityModel _diffusivity_model;
+
+  /// Diffusion prefactor D0 for the Arrhenius diffusivity model
+  const Real _D0;
+
+  /// Activation energy Q for the Arrhenius diffusivity model
+  const Real _Q;
+
+  /// Interfacial energy sigma for the interfacial-energy model
+  const Real _sigma;
+
+  /// Atomic volume V_at for the interfacial-energy model
+  const Real _atomic_volume;
+
+  /// Enthalpy term Omega for the interfacial-energy model
+  const Real _Omega;
+
+  /// Non-configurational entropy term DeltaS for the interfacial-energy model
+  const Real _DeltaS;
 
   usingGenericArrayNodalKernelMembers;
 };
