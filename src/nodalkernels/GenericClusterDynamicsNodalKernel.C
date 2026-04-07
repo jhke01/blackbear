@@ -13,8 +13,6 @@
 /****************************************************************/
 
 #include "GenericClusterDynamicsNodalKernel.h"
-#include "FEProblemBase.h"
-
 #include "libmesh/libmesh_common.h"
 
 namespace
@@ -97,9 +95,6 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::GenericClusterDynamicsNodalKernel
     _Omega(this->template getParam<Real>("Omega")),
     _DeltaS(this->template getParam<Real>("DeltaS"))
 {
-  if (!(this->_fe_problem.useHashTableMatrixAssembly()))
-    mooseError("ClusterDynamicsNodalKernel requires Problem/use_hash_table_matrix_assembly = true");
-
   if (_rate_model == RateModel::SIMPLE)
   {
     if (_beta0 <= 0.0)
@@ -256,78 +251,34 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::computeQpResidual(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Non-AD Jacobian: intra-variable coupling via setJacobian(row, col, value)
-// row = residual component index (cluster size n = row+1)
-// col = variable component being differentiated with respect to (size n = col+1)
-// ---------------------------------------------------------------------------
 template <>
-void
+RealEigenVector
 GenericClusterDynamicsNodalKernelTempl<false>::computeQpJacobian()
 {
   const auto n_comp = static_cast<unsigned int>(_u[_qp].size());
   const Real c1 = _u[_qp](0);
+  RealEigenVector jacobian = RealEigenVector::Zero(n_comp);
 
-  // --- Row 0: monomer ---
-  // F(0) = -(G_1 - k_s*c(0) - 2*beta(1)*c(0)^2
-  //          - sum_{j>=1} beta(j+1)*c(0)*c(j)
-  //          + 2*alpha(2)*c(1)
-  //          + sum_{j>=2} alpha(j+1)*c(j))
-
-  // d F(0)/d c(0) = k_s + 4*beta(1)*c(0) + sum_{j>=1} beta(j+1)*c(j)
+  // This MOOSE ArrayNodalKernel API supports only diagonal Jacobian entries for a
+  // single array variable. We therefore provide the diagonal contribution here.
   {
     Real d00 = _sink + 4.0 * beta(1) * c1;
     for (unsigned int j = 1; j < n_comp; ++j)
       d00 += beta(j + 1) * _u[_qp](j);
-    setJacobian(0, 0, d00);
+    jacobian(0) = d00;
   }
 
-  // d F(0)/d c(j) for j >= 1: beta(j+1)*c(0) - mu(j)*alpha(j+1)
-  // where mu(j) = 2 for j=1 (dimer dissociation releases 2 monomers), 1 otherwise
-  for (unsigned int j = 1; j < n_comp; ++j)
-  {
-    const Real mu = (j == 1) ? 2.0 : 1.0;
-    setJacobian(0, j, beta(j + 1) * c1 - mu * alpha(j + 1));
-  }
-
-  // --- Rows i >= 1: cluster of size n = i+1 ---
   for (unsigned int i = 1; i < n_comp; ++i)
   {
     const unsigned int n = i + 1;
-
-    // d F(i)/d c(0): coupling to monomer
-    // The n=2 case keeps a separate Jacobian entry because growth_in = beta(1)*C_1^2,
-    // so differentiating with respect to the monomer concentration gives
-    // 2*beta(1)*C_1 rather than beta(n-1)*C_{n-1}.
-    // n=2: F(1) = -(beta(1)*c(0)^2 - beta(2)*c(0)*c(1) + ...)
-    //   -> d F(1)/d c(0) = -(2*beta(1)*c(0) - beta(2)*c(1))
-    // n>2: F(i) = -(beta(n-1)*c(0)*c(i-1) - beta(n)*c(0)*c(i) + ...)
-    //   -> d F(i)/d c(0) = -(beta(n-1)*c(i-1) - beta(n)*c(i))
-    if (n == 2)
-      setJacobian(i, 0, -(2.0 * beta(1) * c1 - beta(n) * _u[_qp](i)));
-    else
-      setJacobian(i, 0, -(beta(n - 1) * _u[_qp](i - 1) - beta(n) * _u[_qp](i)));
-
-    // d F(i)/d c(i-1): coupling to the next-smaller cluster (for n > 2 only;
-    // for n=2 this is c(0) which is already handled above)
-    if (i > 1)
-      setJacobian(i, i - 1, -beta(n - 1) * c1);
-
-    // d F(i)/d c(i): self (diagonal)
-    // F(i) = -(... - beta(n)*c(0)*c(i) ... - alpha(n)*c(i))
-    // -> d F(i)/d c(i) = beta(n)*c(0) + alpha(n)
-    setJacobian(i, i, beta(n) * c1 + alpha(n));
-
-    // d F(i)/d c(i+1): coupling to the next-larger cluster
-    // F(i) = -(... + alpha(n+1)*c(i+1) ...)
-    // -> d F(i)/d c(i+1) = -alpha(n+1)
-    if (i + 1 < n_comp)
-      setJacobian(i, i + 1, -alpha(n + 1));
+    jacobian(i) = beta(n) * c1 + alpha(n);
   }
+
+  return jacobian;
 }
 
 template <>
-void
+RealEigenVector
 GenericClusterDynamicsNodalKernelTempl<true>::computeQpJacobian()
 {
   mooseError("Internal error: computeQpJacobian should never be called for the AD version");

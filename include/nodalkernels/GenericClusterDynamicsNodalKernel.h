@@ -28,10 +28,7 @@
  *   i=N-1 -> n=N
  *
  * Unlike the paired ClusterSizeOneNodalKernel + ClusterDynamicsArrayNodalKernel
- * approach, no separate scalar variable is needed. The inter-component coupling
- * (including monomer/cluster coupling) is captured via intra-variable Jacobian
- * entries using setJacobian, which requires the nodal_array_jacobians framework
- * branch.
+ * approach, no separate scalar variable is needed.
  */
 template <bool is_ad>
 class GenericClusterDynamicsNodalKernelTempl : public GenericArrayNodalKernel<is_ad>
@@ -54,7 +51,7 @@ public:
 
 protected:
   virtual void computeQpResidual(GenericRealEigenVector<is_ad> & residual) override;
-  virtual void computeQpJacobian() override;
+  virtual RealEigenVector computeQpJacobian() override;
 
   /// Absorption rate coefficient for the selected rate model
   Real beta(unsigned int n) const;
