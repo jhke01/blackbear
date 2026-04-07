@@ -92,8 +92,13 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::computeQpResidual(
   // Components i >= 1: cluster size n = i+1 >= 2
   // dC_n/dt = growth_in - growth_out + emit_in - emit_out
   // where:
+  //   This form follows the Cu precipitation flux definition and preserves mass:
+  //   dC_n/dt = J_{n-1->n} - J_{n->n+1}, with
+  //   J_{n->n+1} = beta(n)*C_1*C_n - alpha(n+1)*C_{n+1}. For n=2,
+  //   J_{1->2} = beta(1)*C_1^2 - alpha(2)*C_2, so the absorption term is
+  //   beta(1)*C_1^2 with no 1/2 factor.
   //   growth_in  = beta(n-1)*C_1*C_{n-1}  [cluster of size n-1 absorbs a monomer]
-  //              = 0.5*beta(1)*C_1^2       [special case n=2: two monomers combine]
+  //              = beta(1)*C_1^2          [special case n=2: monomer is also C_{n-1}]
   //   growth_out = beta(n)*C_1*C_n         [cluster of size n absorbs a monomer]
   //   emit_in    = alpha(n+1)*C_{n+1}      [cluster of size n+1 emits a monomer]
   //   emit_out   = alpha(n)*C_n            [cluster of size n emits a monomer]
@@ -103,7 +108,7 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::computeQpResidual(
     const auto c_n = _u[_qp](i);
     const auto c_nm1 = _u[_qp](i - 1); // for i=1: c_nm1 = c(0) = monomer
 
-    const auto growth_in = (n == 2) ? 0.5 * beta(1) * c1 * c1 : beta(n - 1) * c1 * c_nm1;
+    const auto growth_in = beta(n - 1) * c1 * c_nm1;
     const auto growth_out = beta(n) * c1 * c_n;
     const auto emit_in = (i + 1 < n_comp) ? alpha(n + 1) * _u[_qp](i + 1) : 0.0;
     const auto emit_out = alpha(n) * c_n;
@@ -152,12 +157,15 @@ GenericClusterDynamicsNodalKernelTempl<false>::computeQpJacobian()
     const unsigned int n = i + 1;
 
     // d F(i)/d c(0): coupling to monomer
-    // n=2: F(1) = -(0.5*beta(1)*c(0)^2 - beta(2)*c(0)*c(1) + ...)
-    //   -> d F(1)/d c(0) = -(beta(1)*c(0) - beta(2)*c(1))
+    // The n=2 case keeps a separate Jacobian entry because growth_in = beta(1)*C_1^2,
+    // so differentiating with respect to the monomer concentration gives
+    // 2*beta(1)*C_1 rather than beta(n-1)*C_{n-1}.
+    // n=2: F(1) = -(beta(1)*c(0)^2 - beta(2)*c(0)*c(1) + ...)
+    //   -> d F(1)/d c(0) = -(2*beta(1)*c(0) - beta(2)*c(1))
     // n>2: F(i) = -(beta(n-1)*c(0)*c(i-1) - beta(n)*c(0)*c(i) + ...)
     //   -> d F(i)/d c(0) = -(beta(n-1)*c(i-1) - beta(n)*c(i))
     if (n == 2)
-      setJacobian(i, 0, -(beta(1) * c1 - beta(n) * _u[_qp](i)));
+      setJacobian(i, 0, -(2.0 * beta(1) * c1 - beta(n) * _u[_qp](i)));
     else
       setJacobian(i, 0, -(beta(n - 1) * _u[_qp](i - 1) - beta(n) * _u[_qp](i)));
 

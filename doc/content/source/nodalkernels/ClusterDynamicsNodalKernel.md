@@ -26,7 +26,9 @@ where $G_1$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/generation)) is t
 where the growth-in term is:
 
 !equation
-\dot{C}_n^{\text{in}} = \begin{cases} \tfrac{1}{2}\beta_1 C_1^2 & n = 2 \\ \beta_{n-1} C_1 C_{n-1} & n > 2 \end{cases}
+\dot{C}_n^{\text{in}} = \beta_{n-1} C_1 C_{n-1}, \qquad n \geq 2
+
+For $n = 2$, this reduces to $\beta_1 C_1^2$ because $C_{n-1} = C_1$.
 
 Absorption and emission rate coefficients scale with the cluster surface area:
 
@@ -58,7 +60,7 @@ Coupling to the monomer column:
 !equation
 \frac{\partial F_i}{\partial C_1} =
 \begin{cases}
--\beta_1 C_1 + \beta_2 C_2 & n = 2 \\
+-2\beta_1 C_1 + \beta_2 C_2 & n = 2 \\
 -\beta_{n-1} C_{n-1} + \beta_n C_n & n > 2
 \end{cases}
 
