@@ -208,7 +208,7 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::computeQpResidual(
   // Component 0: monomer rate equation
   // dC_1/dt = G_1 - k_s*C_1
   //         - 2*beta(1)*C_1^2                        [monomer+monomer -> dimer]
-  //         - sum_{i=1}^{N-1} beta(i+1)*C_1*C_{i+1} [monomer absorbed by larger cluster]
+  //         - sum_{i=1}^{N-2} beta(i+1)*C_1*C_{i+1} [monomer absorbed by larger cluster]
   //         + 2*alpha(2)*C_2                          [dimer dissociation]
   //         + sum_{i=2}^{N-1} alpha(i+1)*C_{i+1}     [larger cluster emission]
   {
@@ -217,7 +217,8 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::computeQpResidual(
     for (auto j = 1; j < n_comp; ++j)
     {
       const unsigned int nj = j + 1; // cluster size at index j
-      absorption += beta(nj) * c1 * _u[_qp](j);
+      if (j + 1 < n_comp)
+        absorption += beta(nj) * c1 * _u[_qp](j);
       emission += (j == 1 ? 2.0 : 1.0) * alpha(nj) * _u[_qp](j);
     }
     residual(0) = -(_generation - _sink * c1 - absorption + emission);
@@ -243,7 +244,7 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::computeQpResidual(
     const auto c_nm1 = _u[_qp](i - 1); // for i=1: c_nm1 = c(0) = monomer
 
     const auto growth_in = beta(n - 1) * c1 * c_nm1;
-    const auto growth_out = beta(n) * c1 * c_n;
+    const auto growth_out = (i + 1 < n_comp) ? beta(n) * c1 * c_n : 0.0;
     const auto emit_in = (i + 1 < n_comp) ? alpha(n + 1) * _u[_qp](i + 1) : 0.0;
     const auto emit_out = alpha(n) * c_n;
 

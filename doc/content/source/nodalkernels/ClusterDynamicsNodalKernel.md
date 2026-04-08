@@ -14,7 +14,7 @@ Array component index $i$ corresponds to cluster size $n = i+1$, i.e. monomer ($
 +Component 0 (monomer, $n=1$):+
 
 !equation
-\frac{dC_1}{dt} = G_1 - k_s C_1 - 2\beta_1 C_1^2 - \sum_{n=2}^{N} \beta_n C_1 C_n + 2\alpha_2 C_2 + \sum_{n=3}^{N} \alpha_n C_n
+\frac{dC_1}{dt} = G_1 - k_s C_1 - 2\beta_1 C_1^2 - \sum_{n=2}^{N-1} \beta_n C_1 C_n + 2\alpha_2 C_2 + \sum_{n=3}^{N} \alpha_n C_n
 
 where $G_1$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/generation)) is the monomer generation rate,  $k_s$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/sink)) is the  Linear sink coefficient
 
@@ -29,6 +29,17 @@ where the growth-in term is:
 \dot{C}_n^{\text{in}} = \beta_{n-1} C_1 C_{n-1}, \qquad n \geq 2
 
 For $n = 2$, this reduces to $\beta_1 C_1^2$ because $C_{n-1} = C_1$.
+
+!alert note title=Largest Cluster Truncation
+For the largest tracked cluster size $n = N$, the system is closed at the upper bound of the
+truncated cluster space. In that case, the forward absorption term to an untracked $N+1$ cluster
+is set to zero and there is no emission-in term from $N+1$:
+
+!equation
+\frac{dC_N}{dt} = \beta_{N-1} C_1 C_{N-1} - \alpha_N C_N
+
+This avoids an unphysical loss of mass from the tracked system through the top cluster bin and
+preserves mass within the truncated cluster space.
 
 The rate coefficients depend on the selected [!param](/NodalKernels/ClusterDynamicsNodalKernel/rate_model).
 
