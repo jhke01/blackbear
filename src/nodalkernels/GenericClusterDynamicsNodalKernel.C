@@ -18,6 +18,7 @@
 namespace
 {
 constexpr Real kB = 1.380649e-23;
+constexpr Real eV = 1.602176634e-19;
 }
 
 registerMooseObject("BlackBearApp", ClusterDynamicsNodalKernel);
@@ -46,7 +47,7 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::validParams()
       diffusivity_model,
       "Diffusivity model used only when rate_model = interfacial_energy. "
       "'constant' uses monomer_diffusivity directly, while 'arrhenius' computes "
-      "the diffusivity from D0, Q, and temperature.");
+      "the diffusivity from D0, Q_eV, and temperature.");
   params.addParam<Real>(
       "beta0", 0.0, "Base absorption coefficient for rate_model = simple.");
   params.addParam<Real>(
@@ -60,7 +61,7 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::validParams()
   params.addParam<Real>(
       "D0", 0.0, "Diffusion prefactor D0 [m^2/s] for diffusivity_model = arrhenius.");
   params.addParam<Real>(
-      "Q", 0.0, "Activation energy Q [J] for diffusivity_model = arrhenius.");
+      "Q_eV", 0.0, "Activation energy Q [eV] for diffusivity_model = arrhenius.");
   params.addParam<Real>("radiation_enhanced_factor",
                         1.0,
                         "Multiplicative radiation-enhanced factor applied to the monomer "
@@ -70,11 +71,13 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::validParams()
   params.addParam<Real>(
       "atomic_volume", 0.0, "Atomic volume V_at [m^3] for the interfacial-energy model.");
   params.addParam<Real>(
-      "Omega", 0.0, "Enthalpy term Omega [J] for the interfacial-energy model.");
-  params.addParam<Real>(
-      "DeltaS",
+      "Omega_kB_K",
       0.0,
-      "Non-configurational entropy term DeltaS [J/K] for the interfacial-energy model.");
+      "Enthalpy term Omega [k_B*K] for the interfacial-energy model.");
+  params.addParam<Real>(
+      "DeltaS_kB",
+      0.0,
+      "Non-configurational entropy term DeltaS [k_B] for the interfacial-energy model.");
   return params;
 }
 
@@ -93,12 +96,12 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::GenericClusterDynamicsNodalKernel
     _diffusivity_model(this->template getParam<MooseEnum>("diffusivity_model")
                            .template getEnum<DiffusivityModel>()),
     _D0(this->template getParam<Real>("D0")),
-    _Q(this->template getParam<Real>("Q")),
+    _Q(this->template getParam<Real>("Q_eV") * eV),
     _radiation_enhanced_factor(this->template getParam<Real>("radiation_enhanced_factor")),
     _sigma(this->template getParam<Real>("sigma")),
     _atomic_volume(this->template getParam<Real>("atomic_volume")),
-    _Omega(this->template getParam<Real>("Omega")),
-    _DeltaS(this->template getParam<Real>("DeltaS"))
+    _Omega(this->template getParam<Real>("Omega_kB_K") * kB),
+    _DeltaS(this->template getParam<Real>("DeltaS_kB") * kB)
 {
   if (_rate_model == RateModel::SIMPLE)
   {
@@ -125,7 +128,7 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::GenericClusterDynamicsNodalKernel
                    "diffusivity_model = arrhenius requires D0 > 0.");
       if (_Q <= 0.0)
         mooseError("ClusterDynamicsNodalKernel with rate_model = interfacial_energy and "
-                   "diffusivity_model = arrhenius requires Q > 0.");
+                   "diffusivity_model = arrhenius requires Q_eV > 0.");
     }
     if (_sigma <= 0.0)
       mooseError(
@@ -136,6 +139,12 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::GenericClusterDynamicsNodalKernel
     if (_radiation_enhanced_factor <= 0.0)
       mooseError("ClusterDynamicsNodalKernel with rate_model = interfacial_energy requires "
                  "radiation_enhanced_factor > 0.");
+    if (_Omega <= 0.0)
+      mooseError(
+          "ClusterDynamicsNodalKernel with rate_model = interfacial_energy requires Omega_kB_K > 0.");
+    if (_DeltaS <= 0.0)
+      mooseError(
+          "ClusterDynamicsNodalKernel with rate_model = interfacial_energy requires DeltaS_kB > 0.");
   }
 }
 

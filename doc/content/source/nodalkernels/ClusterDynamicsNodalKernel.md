@@ -66,7 +66,7 @@ for `diffusivity_model = constant`, where $D_m$ is supplied directly by [!param]
 !equation
 D_m = D_0 \exp\left(-\frac{Q}{k_B T}\right)
 
-for `diffusivity_model = arrhenius`, where $D_0$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/D0)) is the diffusion prefactor and $Q$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/Q)) is the activation energy.
+for `diffusivity_model = arrhenius`, where $D_0$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/D0)) is the diffusion prefactor and $Q$ is supplied directly in electron volts through [!param](/NodalKernels/ClusterDynamicsNodalKernel/Q_eV).
 
 In both diffusivity modes, the computed monomer diffusivity is multiplied by
 [!param](/NodalKernels/ClusterDynamicsNodalKernel/radiation_enhanced_factor), which defaults to
@@ -81,7 +81,7 @@ The emission coefficient is then derived by detailed balance using the cluster b
 !equation
 E_n^b = \Omega - T\Delta S - (36\pi)^{1/3}V_{at}^{2/3}\sigma\left[n^{2/3} - (n-1)^{2/3}\right]
 
-where $T$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/temperature)) is the temperature, $\sigma$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/sigma)) is the interfacial energy, $\Omega$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/Omega)) is the enthalpy term, and $\Delta S$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/DeltaS)) is the non-configurational entropy term.
+where $T$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/temperature)) is the temperature, $\sigma$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/sigma)) is the interfacial energy, $\Omega$ is supplied through [!param](/NodalKernels/ClusterDynamicsNodalKernel/Omega_kB_K) in $k_B \cdot K$, and $\Delta S$ is supplied through [!param](/NodalKernels/ClusterDynamicsNodalKernel/DeltaS_kB) in units of $k_B$.
 
 ### Intra-Variable Jacobian
 

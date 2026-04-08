@@ -98,7 +98,7 @@ protected:
   /// Diffusion prefactor D0 for the Arrhenius diffusivity model
   const Real _D0;
 
-  /// Activation energy Q for the Arrhenius diffusivity model
+  /// Activation energy Q for the Arrhenius diffusivity model [J]
   const Real _Q;
 
   /// Radiation-enhanced multiplier applied to the monomer diffusivity

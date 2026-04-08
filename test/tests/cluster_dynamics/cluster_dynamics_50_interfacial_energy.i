@@ -45,12 +45,12 @@
 
     temperature = 563.15
     D0 = 6.3e-5
-    Q = 3.67e-19
+    Q_eV = 2.29
     radiation_enhanced_factor = 2.5e7
     sigma = 0.37
     atomic_volume = 1.1782924e-29
-    Omega = 8.636958495e-20
-    DeltaS = 1.195242034e-23
+    Omega_kB_K = 6255.0
+    DeltaS_kB = 0.866
   []
 []
 
