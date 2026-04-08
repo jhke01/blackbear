@@ -17,6 +17,8 @@
 #include "GenericArrayNodalKernel.h"
 #include "MooseEnum.h"
 
+#include <vector>
+
 /**
  * Combined cluster dynamics array nodal kernel for all cluster sizes (1 through N).
  *
@@ -71,6 +73,9 @@ protected:
   /// Binding energy for a cluster of size n used by the interfacial-energy model
   Real bindingEnergy(unsigned int n) const;
 
+  /// Build or refresh cached size-dependent coefficients for the current array size
+  void ensureCoefficientCache(unsigned int n_comp) const;
+
   /// Monomer generation rate G_1
   const Real _generation;
 
@@ -115,6 +120,15 @@ protected:
 
   /// Non-configurational entropy term DeltaS for the interfacial-energy model
   const Real _DeltaS;
+
+  /// Cached beta coefficients indexed by cluster size n
+  mutable std::vector<Real> _beta_cache;
+
+  /// Cached alpha coefficients indexed by cluster size n
+  mutable std::vector<Real> _alpha_cache;
+
+  /// Number of array components represented by the current coefficient cache
+  mutable unsigned int _cache_size = 0;
 
   usingGenericArrayNodalKernelMembers;
 };

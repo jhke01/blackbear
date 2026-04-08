@@ -152,6 +152,9 @@ template <bool is_ad>
 Real
 GenericClusterDynamicsNodalKernelTempl<is_ad>::beta(const unsigned int n) const
 {
+  if (n < _beta_cache.size())
+    return _beta_cache[n];
+
   if (_rate_model == RateModel::SIMPLE)
     return _beta0 * std::cbrt(static_cast<Real>(n));
 
@@ -162,6 +165,9 @@ template <bool is_ad>
 Real
 GenericClusterDynamicsNodalKernelTempl<is_ad>::alpha(const unsigned int n) const
 {
+  if (n < _alpha_cache.size())
+    return _alpha_cache[n];
+
   if (_rate_model == RateModel::SIMPLE)
     return _alpha0 * std::cbrt(static_cast<Real>(n));
 
@@ -216,10 +222,67 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::bindingEnergy(const unsigned int 
 
 template <bool is_ad>
 void
+GenericClusterDynamicsNodalKernelTempl<is_ad>::ensureCoefficientCache(
+    const unsigned int n_comp) const
+{
+  if (_cache_size == n_comp)
+    return;
+
+  _beta_cache.assign(n_comp + 1, 0.0);
+  _alpha_cache.assign(n_comp + 1, 0.0);
+
+  if (_rate_model == RateModel::SIMPLE)
+  {
+    for (unsigned int n = 1; n <= n_comp; ++n)
+    {
+      const Real n_to_one_third = std::cbrt(static_cast<Real>(n));
+      _beta_cache[n] = _beta0 * n_to_one_third;
+      if (n >= 2)
+        _alpha_cache[n] = _alpha0 * n_to_one_third;
+    }
+  }
+  else
+  {
+    const Real diffusivity = monomerDiffusivity();
+    const Real atomic_volume = atomicVolume();
+    const Real inv_atomic_volume = 1.0 / atomic_volume;
+    const Real radius_prefactor =
+        std::cbrt(3.0 * atomic_volume / (4.0 * libMesh::pi));
+    const Real r1 = radius_prefactor;
+    const Real surface_prefactor =
+        std::cbrt(36.0 * libMesh::pi) * std::pow(atomic_volume, 2.0 / 3.0) * _sigma;
+    const Real thermal_factor = kB * _temperature;
+    const Real omega_minus_t_delta_s = _Omega - _temperature * _DeltaS;
+
+    std::vector<Real> radius_cache(n_comp + 1, 0.0);
+    for (unsigned int n = 1; n <= n_comp; ++n)
+    {
+      radius_cache[n] = radius_prefactor * std::cbrt(static_cast<Real>(n));
+      _beta_cache[n] =
+          4.0 * libMesh::pi * (r1 + radius_cache[n]) * diffusivity * inv_atomic_volume;
+    }
+
+    for (unsigned int n = 2; n <= n_comp; ++n)
+    {
+      const Real binding_energy =
+          omega_minus_t_delta_s -
+          surface_prefactor *
+              (std::pow(static_cast<Real>(n), 2.0 / 3.0) -
+               std::pow(static_cast<Real>(n - 1), 2.0 / 3.0));
+      _alpha_cache[n] = _beta_cache[n - 1] * std::exp(-binding_energy / thermal_factor);
+    }
+  }
+
+  _cache_size = n_comp;
+}
+
+template <bool is_ad>
+void
 GenericClusterDynamicsNodalKernelTempl<is_ad>::computeQpResidual(
     GenericRealEigenVector<is_ad> & residual)
 {
   const auto n_comp = _u[_qp].size();
+  ensureCoefficientCache(n_comp);
   residual.resize(n_comp);
 
   // c(i) = concentration of cluster of size n = i+1
@@ -277,6 +340,7 @@ RealEigenVector
 GenericClusterDynamicsNodalKernelTempl<false>::computeQpJacobian()
 {
   const auto n_comp = static_cast<unsigned int>(_u[_qp].size());
+  ensureCoefficientCache(n_comp);
   const Real c1 = _u[_qp](0);
   RealEigenVector jacobian = RealEigenVector::Zero(n_comp);
 
