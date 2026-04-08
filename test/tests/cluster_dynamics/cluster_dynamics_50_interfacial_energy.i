@@ -70,6 +70,7 @@
     type = ClusterTotalDensity
     clusters = clusters
     n_minimum = 11
+    atomic_volume = 1.1782924e-29
   []
 []
 

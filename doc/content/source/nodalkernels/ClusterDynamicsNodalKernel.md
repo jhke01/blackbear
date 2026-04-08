@@ -48,6 +48,10 @@ The rate coefficients depend on the selected [!param](/NodalKernels/ClusterDynam
 
 For `rate_model = simple`, $\beta_0$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/beta0)) and $\alpha_0$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/alpha0)) are user-supplied base coefficients.
 
+In this simple model, [!param](/NodalKernels/ClusterDynamicsNodalKernel/atomic_volume) does not
+enter the rate coefficients. It is only relevant if the same physical atomic volume is later used
+by [ClusterTotalDensity.md] to convert the output from concentration-like units to `#/m^3`.
+
 For `rate_model = interfacial_energy`, the absorption coefficient is computed from the cluster geometry and monomer diffusivity:
 
 !equation
@@ -82,6 +86,10 @@ The emission coefficient is then derived by detailed balance using the cluster b
 E_n^b = \Omega - T\Delta S - (36\pi)^{1/3}V_{at}^{2/3}\sigma\left[n^{2/3} - (n-1)^{2/3}\right]
 
 where $T$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/temperature)) is the temperature, $\sigma$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/sigma)) is the interfacial energy, $\Omega$ is supplied through [!param](/NodalKernels/ClusterDynamicsNodalKernel/Omega_kB_K) in $k_B \cdot K$, and $\Delta S$ is supplied through [!param](/NodalKernels/ClusterDynamicsNodalKernel/DeltaS_kB) in units of $k_B$.
+
+In this interfacial-energy model, [!param](/NodalKernels/ClusterDynamicsNodalKernel/atomic_volume)
+affects both the physics above and the output conversion if [ClusterTotalDensity.md] is used to
+report cluster density in `#/m^3`.
 
 ### Intra-Variable Jacobian
 
