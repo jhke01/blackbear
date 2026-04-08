@@ -68,6 +68,11 @@ D_m = D_0 \exp\left(-\frac{Q}{k_B T}\right)
 
 for `diffusivity_model = arrhenius`, where $D_0$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/D0)) is the diffusion prefactor and $Q$ ([!param](/NodalKernels/ClusterDynamicsNodalKernel/Q)) is the activation energy.
 
+In both diffusivity modes, the computed monomer diffusivity is multiplied by
+[!param](/NodalKernels/ClusterDynamicsNodalKernel/radiation_enhanced_factor), which defaults to
+1.0 and may be used to represent radiation-enhanced transport without manually rescaling the input
+diffusivity or diffusion prefactor.
+
 The emission coefficient is then derived by detailed balance using the cluster binding energy:
 
 !equation

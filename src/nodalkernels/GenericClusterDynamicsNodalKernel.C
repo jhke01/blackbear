@@ -61,6 +61,10 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::validParams()
       "D0", 0.0, "Diffusion prefactor D0 [m^2/s] for diffusivity_model = arrhenius.");
   params.addParam<Real>(
       "Q", 0.0, "Activation energy Q [J] for diffusivity_model = arrhenius.");
+  params.addParam<Real>("radiation_enhanced_factor",
+                        1.0,
+                        "Multiplicative radiation-enhanced factor applied to the monomer "
+                        "diffusivity for the interfacial-energy model.");
   params.addParam<Real>(
       "sigma", 0.0, "Interfacial energy sigma [J/m^2] for the interfacial-energy model.");
   params.addParam<Real>(
@@ -90,6 +94,7 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::GenericClusterDynamicsNodalKernel
                            .template getEnum<DiffusivityModel>()),
     _D0(this->template getParam<Real>("D0")),
     _Q(this->template getParam<Real>("Q")),
+    _radiation_enhanced_factor(this->template getParam<Real>("radiation_enhanced_factor")),
     _sigma(this->template getParam<Real>("sigma")),
     _atomic_volume(this->template getParam<Real>("atomic_volume")),
     _Omega(this->template getParam<Real>("Omega")),
@@ -128,6 +133,9 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::GenericClusterDynamicsNodalKernel
     if (_atomic_volume <= 0.0)
       mooseError(
           "ClusterDynamicsNodalKernel with rate_model = interfacial_energy requires atomic_volume > 0.");
+    if (_radiation_enhanced_factor <= 0.0)
+      mooseError("ClusterDynamicsNodalKernel with rate_model = interfacial_energy requires "
+                 "radiation_enhanced_factor > 0.");
   }
 }
 
@@ -165,10 +173,13 @@ template <bool is_ad>
 Real
 GenericClusterDynamicsNodalKernelTempl<is_ad>::monomerDiffusivity() const
 {
+  Real diffusivity = 0.0;
   if (_diffusivity_model == DiffusivityModel::CONSTANT)
-    return _monomer_diffusivity;
+    diffusivity = _monomer_diffusivity;
+  else
+    diffusivity = _D0 * std::exp(-_Q / (kB * _temperature));
 
-  return _D0 * std::exp(-_Q / (kB * _temperature));
+  return _radiation_enhanced_factor * diffusivity;
 }
 
 template <bool is_ad>

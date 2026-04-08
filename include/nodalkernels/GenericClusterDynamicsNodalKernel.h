@@ -101,6 +101,9 @@ protected:
   /// Activation energy Q for the Arrhenius diffusivity model
   const Real _Q;
 
+  /// Radiation-enhanced multiplier applied to the monomer diffusivity
+  const Real _radiation_enhanced_factor;
+
   /// Interfacial energy sigma for the interfacial-energy model
   const Real _sigma;
 
