@@ -10,8 +10,16 @@ $n \geq n_\mathrm{min}$ are included.
 
 !equation
 \bar r =
-\frac{\displaystyle\sum_{n=n_\mathrm{min}}^N r_1 n^{1/3} C_n}
+\frac{\displaystyle\sum_{n=n_\mathrm{min}}^N r_1 n^{p} C_n}
 {\displaystyle\sum_{n=n_\mathrm{min}}^N C_n}.
+
+The exponent $p$ is
+[!param](/Postprocessors/ClusterAverageRadiusGrouped/radius_exponent), $1/3$
+by default for three-dimensional clusters such as the spherical clusters of
+[GenericClusterDynamicsGroupedNodalKernel.md] and the voids of
+[GenericVacancyVoidGroupedNodalKernel.md]. Set it to $1/2$ for
+two-dimensional clusters such as the interstitial loops of
+[GenericInterstitialLoopGroupedNodalKernel.md].
 
 For complete grouped bins, the denominator is evaluated from the stored zeroth
 coefficient. Radius sums needed by the numerator are precomputed for each bin.

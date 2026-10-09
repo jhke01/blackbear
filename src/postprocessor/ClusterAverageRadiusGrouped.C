@@ -51,7 +51,12 @@ ClusterAverageRadiusGrouped::validParams()
       0.0,
       "Relaxation factor for grouped nonnegativity enforcement. Endpoint concentrations are "
       "allowed down to -factor * L0 before limiting.");
-  params.addParam<Real>("r1", 1.0, "Monomer radius scale where r_n = r1*n^(1/3)");
+  params.addParam<Real>("r1", 1.0, "Monomer radius scale where r_n = r1*n^radius_exponent");
+  params.addParam<Real>(
+      "radius_exponent",
+      1.0 / 3.0,
+      "Exponent p in r_n = r1*n^p: 1/3 for three-dimensional clusters (the default, e.g. "
+      "voids), 1/2 for two-dimensional clusters (e.g. interstitial loops).");
   params.addRangeCheckedParam<unsigned int>(
       "n_minimum", 2, "n_minimum > 0", "Minimum cluster size to include in the average radius.");
   return params;
@@ -61,6 +66,7 @@ ClusterAverageRadiusGrouped::ClusterAverageRadiusGrouped(const InputParameters &
   : NodalPostprocessor(parameters),
     _clusters(coupledArrayValue("clusters")),
     _r1(getParam<Real>("r1")),
+    _radius_exponent(getParam<Real>("radius_exponent")),
     _n_minimum(getParam<unsigned int>("n_minimum")),
     _layout(getParam<unsigned int>("num_cluster_sizes"),
             getParam<unsigned int>("explicit_max"),
@@ -89,7 +95,7 @@ ClusterAverageRadiusGrouped::ClusterAverageRadiusGrouped(const InputParameters &
     Real radius_centered_sum = 0.0;
     for (unsigned int n = bin.start; n <= bin.end; ++n)
     {
-      const Real r_n = _r1 * std::cbrt(static_cast<Real>(n));
+      const Real r_n = _r1 * std::pow(static_cast<Real>(n), _radius_exponent);
       radius_sum += r_n;
       radius_centered_sum += r_n * (static_cast<Real>(n) - bin.mean_x);
     }
@@ -142,7 +148,7 @@ ClusterAverageRadiusGrouped::execute()
   for (unsigned int n = _n_minimum; n <= explicit_upper; ++n)
   {
     const Real c_n = concentrationAt(n);
-    _radius_weighted_sum += _r1 * std::cbrt(static_cast<Real>(n)) * c_n;
+    _radius_weighted_sum += _r1 * std::pow(static_cast<Real>(n), _radius_exponent) * c_n;
     _cluster_sum += c_n;
   }
 
@@ -166,7 +172,7 @@ ClusterAverageRadiusGrouped::execute()
     for (unsigned int n = std::max(_n_minimum, bin.start); n <= bin.end; ++n)
     {
       const Real c_n = concentrationAt(n);
-      _radius_weighted_sum += _r1 * std::cbrt(static_cast<Real>(n)) * c_n;
+      _radius_weighted_sum += _r1 * std::pow(static_cast<Real>(n), _radius_exponent) * c_n;
       _cluster_sum += c_n;
     }
   }

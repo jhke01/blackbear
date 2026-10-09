@@ -46,4 +46,19 @@
     design = 'PointDefectRecombinationNodalKernel.md'
     requirement = 'BlackBear shall provide an analytical on- and off-diagonal Jacobian for the PointDefectRecombinationNodalKernel that captures the recombination coupling between a vacancy-void and an interstitial-loop variable.'
   []
+  [defect_dynamics_opposite_absorption_small]
+    type = CSVDiff
+    input = defect_dynamics_opposite_absorption_small.i
+    csvdiff = 'defect_dynamics_opposite_absorption_small_out.csv'
+    design = 'GenericVacancyVoidGroupedNodalKernel.md GenericInterstitialLoopGroupedNodalKernel.md'
+    requirement = 'BlackBear shall couple a vacancy-void and an interstitial-loop grouped cluster dynamics variable through opposite-species monomer absorption, where an interstitial monomer shrinks a void and a vacancy monomer shrinks a loop.'
+  []
+  [defect_dynamics_opposite_absorption_jacobian]
+    type = PetscJacobianTester
+    input = defect_dynamics_opposite_absorption_jacobian.i
+    run_sim = True
+    ratio_tol = 1e-7
+    design = 'GenericVacancyVoidGroupedNodalKernel.md GenericInterstitialLoopGroupedNodalKernel.md'
+    requirement = 'BlackBear shall provide an analytical on- and off-diagonal Jacobian for the opposite-species absorption terms coupling the VacancyVoidGroupedNodalKernel and InterstitialLoopGroupedNodalKernel.'
+  []
 []

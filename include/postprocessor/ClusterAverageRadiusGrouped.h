@@ -37,6 +37,7 @@ protected:
 
   const ArrayVariableValue & _clusters;
   const Real _r1;
+  const Real _radius_exponent;
   const unsigned int _n_minimum;
   const ClusterGroupingLayout _layout;
   const bool _enforce_group_nonnegative;
