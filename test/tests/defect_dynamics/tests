@@ -1,0 +1,17 @@
+[Tests]
+  design = 'GenericVacancyVoidGroupedNodalKernel.md'
+  [vacancy_void_grouped_small]
+    type = CSVDiff
+    input = vacancy_void_grouped_small.i
+    csvdiff = 'vacancy_void_grouped_small_out.csv'
+    requirement = 'BlackBear shall solve a grouped vacancy-void-only cluster dynamics problem using the VacancyVoidGroupedNodalKernel, including the finite-sink-strength correction to the void absorption rate.'
+    allow_warnings = false
+  []
+  [vacancy_void_grouped_jacobian]
+    type = PetscJacobianTester
+    input = vacancy_void_jacobian_grouped.i
+    run_sim = True
+    ratio_tol = 1e-7
+    requirement = 'BlackBear shall provide an analytical intra-variable Jacobian for the VacancyVoidGroupedNodalKernel that captures the finite-sink-strength absorption correction and the capillary-law emission coefficients.'
+  []
+[]
