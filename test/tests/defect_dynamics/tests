@@ -1,9 +1,9 @@
 [Tests]
-  design = 'GenericVacancyVoidGroupedNodalKernel.md'
   [vacancy_void_grouped_small]
     type = CSVDiff
     input = vacancy_void_grouped_small.i
     csvdiff = 'vacancy_void_grouped_small_out.csv'
+    design = 'GenericVacancyVoidGroupedNodalKernel.md'
     requirement = 'BlackBear shall solve a grouped vacancy-void-only cluster dynamics problem using the VacancyVoidGroupedNodalKernel, including the finite-sink-strength correction to the void absorption rate.'
     allow_warnings = false
   []
@@ -12,6 +12,23 @@
     input = vacancy_void_jacobian_grouped.i
     run_sim = True
     ratio_tol = 1e-7
+    design = 'GenericVacancyVoidGroupedNodalKernel.md'
     requirement = 'BlackBear shall provide an analytical intra-variable Jacobian for the VacancyVoidGroupedNodalKernel that captures the finite-sink-strength absorption correction and the capillary-law emission coefficients.'
+  []
+  [interstitial_loop_grouped_small]
+    type = CSVDiff
+    input = interstitial_loop_grouped_small.i
+    csvdiff = 'interstitial_loop_grouped_small_out.csv'
+    design = 'GenericInterstitialLoopGroupedNodalKernel.md'
+    requirement = 'BlackBear shall solve a grouped interstitial-loop-only cluster dynamics problem using the InterstitialLoopGroupedNodalKernel, including the size-dependent dislocation-loop bias factor in the absorption rate.'
+    allow_warnings = false
+  []
+  [interstitial_loop_grouped_jacobian]
+    type = PetscJacobianTester
+    input = interstitial_loop_jacobian_grouped.i
+    run_sim = True
+    ratio_tol = 1e-7
+    design = 'GenericInterstitialLoopGroupedNodalKernel.md'
+    requirement = 'BlackBear shall provide an analytical intra-variable Jacobian for the InterstitialLoopGroupedNodalKernel that captures the size-dependent dislocation-loop bias factor and the capillary-law emission coefficients.'
   []
 []
