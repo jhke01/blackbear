@@ -22,10 +22,8 @@
   dpa_rate = 1.5e-3
   cascade_efficiency = 0.1
   dislocation_density = 0
-  tem_visible_radius = 1.6e-10
 
   [Grid]
-    num_cluster_sizes = 30
     explicit_max = 6
     spacing = linear
     linear_width = 4
@@ -39,6 +37,8 @@
     capillary_coefficient_eV = 2.030206194432379
     capillary_constant_eV = -0.33020619443237886
     exponent = 0.67
+    num_cluster_sizes = 30
+    resolvable_radius = 1.6e-10
   []
 []
 

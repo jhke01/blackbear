@@ -136,6 +136,28 @@ DefectSpeciesAction::validParams()
       "size-dependent law (Z, Z_loop, alpha) or a single constant value (Z only, i.e. "
       "equivalent to Z_loop = Z).");
 
+  params.addParam<unsigned int>(
+      "num_cluster_sizes",
+      "Maximum physical cluster size (point defects) this species' grouped array represents, "
+      "given directly. Void and loop populations routinely need different caps, so this is set "
+      "per species, not shared. Exactly one of {num_cluster_sizes, max_cluster_radius_m} must be "
+      "given.");
+  params.addParam<Real>(
+      "max_cluster_radius_m",
+      "Maximum physical cluster size, given as a radius [m] instead of a point-defect count; "
+      "converted to num_cluster_sizes using this species' own monomer radius law (r_n = "
+      "r1*n^(1/3) for a void, r1*n^(1/2) for a loop). Exactly one of {num_cluster_sizes, "
+      "max_cluster_radius_m} must be given.");
+
+  params.addParam<Real>(
+      "resolvable_radius",
+      0.0,
+      "If positive, adds a number-density and average-radius postprocessor pair for this "
+      "species, counting only clusters at or above this radius [m] -- the smallest cluster size "
+      "resolvable by whatever characterization technique the input is being compared against "
+      "(e.g. TEM). Left at zero (the default), no such postprocessors are added for this "
+      "species.");
+
   return params;
 }
 
@@ -157,10 +179,27 @@ checkCapillaryInputPair(const InputParameters & params)
               "capillary_constant_eV} to specify the capillary formation-energy law.");
   return has_direct;
 }
+
+bool
+checkClusterSizeInputPair(const InputParameters & params)
+{
+  const bool has_count = params.isParamSetByUser("num_cluster_sizes");
+  const bool has_radius = params.isParamSetByUser("max_cluster_radius_m");
+  if (has_count && has_radius)
+    mooseError("DefectSpeciesAction cannot set both num_cluster_sizes and "
+              "max_cluster_radius_m; use exactly one of the two ways to specify this species' "
+              "maximum cluster size.");
+  if (!has_count && !has_radius)
+    mooseError("DefectSpeciesAction requires either num_cluster_sizes or max_cluster_radius_m "
+              "to specify this species' maximum cluster size.");
+  return has_radius;
+}
 } // namespace
 
 DefectSpeciesAction::DefectSpeciesAction(const InputParameters & params)
-  : Action(params), _uses_direct_capillary_coefficients(checkCapillaryInputPair(params))
+  : Action(params),
+    _uses_direct_capillary_coefficients(checkCapillaryInputPair(params)),
+    _uses_direct_cluster_size_count(!checkClusterSizeInputPair(params))
 {
   const auto geometry = getParam<MooseEnum>("geometry");
   if (geometry == "void" && parameters().isParamSetByUser("Z_loop"))
@@ -174,4 +213,40 @@ DefectSpeciesAction::DefectSpeciesAction(const InputParameters & params)
     paramWarning("burgers_vector",
                 "burgers_vector has no effect for geometry = void: only a loop's radius and "
                 "bias laws use it.");
+}
+
+void
+DefectSpeciesAction::monomerRadiusLaw(
+    Real atomic_volume, Real lattice_parameter, Real & r1, Real & radius_exponent) const
+{
+  if (getParam<MooseEnum>("geometry") == "void")
+  {
+    r1 = std::cbrt(3.0 * atomic_volume / (4.0 * libMesh::pi));
+    radius_exponent = 1.0 / 3.0;
+  }
+  else
+  {
+    const Real burgers_vector = getParam<Real>("burgers_vector") != 0.0
+                                     ? getParam<Real>("burgers_vector")
+                                     : lattice_parameter / std::sqrt(3.0);
+    r1 = std::sqrt(atomic_volume / (libMesh::pi * burgers_vector));
+    radius_exponent = 0.5;
+  }
+}
+
+unsigned int
+DefectSpeciesAction::clusterSizeFromRadius(Real radius, Real r1, Real radius_exponent)
+{
+  return static_cast<unsigned int>(std::ceil(std::pow(radius / r1, 1.0 / radius_exponent)));
+}
+
+unsigned int
+DefectSpeciesAction::resolvedNumClusterSizes(Real atomic_volume, Real lattice_parameter) const
+{
+  if (_uses_direct_cluster_size_count)
+    return getParam<unsigned int>("num_cluster_sizes");
+
+  Real r1, radius_exponent;
+  monomerRadiusLaw(atomic_volume, lattice_parameter, r1, radius_exponent);
+  return clusterSizeFromRadius(getParam<Real>("max_cluster_radius_m"), r1, radius_exponent);
 }

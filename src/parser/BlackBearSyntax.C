@@ -27,6 +27,7 @@ associateSyntax(Syntax & syntax, ActionFactory & /*action_factory*/)
 
   registerSyntax("DefectDynamicsAction", "DefectDynamics");
   registerSyntax("DefectDynamicsGridAction", "DefectDynamics/Grid");
+  registerSyntax("DefectRecoveryAction", "DefectDynamics/Recovery");
   registerSyntax("DefectSpeciesAction", "DefectDynamics/*");
 }
 } // namespace BlackBear

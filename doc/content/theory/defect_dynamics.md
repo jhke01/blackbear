@@ -237,6 +237,47 @@ from the interstitial monomer equation (coupled to the vacancy variable).
 Like the opposite-absorption terms above, this is a genuinely cross-variable
 term and is implemented non-AD only, for the same reason.
 
+## Dislocation Recovery
+
+Both families' monomer equations include a dislocation-sink loss term, $k_s C_1$, where $k_s =
+D Z \rho$ (the core kernels' own `sink` parameter -- see
+[GenericVacancyVoidGroupedNodalKernel.md]'s own documentation of its `sink` input). By default
+$\rho$, the dislocation density, is a fixed constant. [GenericDislocationRecoveryNodalKernel.md]
+replaces this with a time-evolving $\rho(t)$ for species where that module is active, reflecting
+the experimental observation (Pokor et al. 2004) that the initial dislocation network of a
+cold-worked alloy anneals out under irradiation via dislocation climb: a net flux of absorbed
+point defects lets dislocations climb and annihilate each other, at a rate set by
+
+!equation
+\frac{d\rho}{dt} = -K b^2 \rho^{3/2},
+
+whose closed-form solution,
+
+!equation
+\rho(t) = \left(\rho_0^{-1/2} + \frac{1}{2}K b^2 t\right)^{-2},
+
+depends only on the current simulation time and three constants: the initial density $\rho_0$,
+the recovery rate constant $K$, and the dislocation network's own Burgers vector $b$ -- a
+distinct quantity from any loop species' own geometric Burgers vector. Neither $\rho$, $K$, nor
+this $b$ carries a species subscript in Pokor's own equations, so one shared `[Recovery]`
+sub-block (`DefectRecoveryAction`) supplies the same $\rho_0$/$K$/$b$ to a
+[GenericDislocationRecoveryNodalKernel.md] instance on each species present, each using that
+species' own $D$ and $Z$. Because $\rho(t)$ never depends on the solution itself, this term's
+Jacobian is a plain diagonal entry, recomputed each call from the current simulation time rather
+than read from a stored constant -- and because it needs no coupling to any other variable, the
+kernel is AD-safe, unlike the opposite-absorption and recombination terms above.
+
+!alert note
+Pokor's own text quotes $K$ in units of m$^{-1}$ for the three reactor conditions it reports
+(300, 970, 14400), but the governing equation above requires $K$ in m$^{-1}$s$^{-1}$ for
+dimensional consistency. Treat $K$ as a fit parameter in self-consistent SI units, not a literal
+copy of the paper's quoted numbers.
+
+When no `[Recovery]` sub-block is given, a species' sink stays exactly the constant
+`sink = D*Z*dislocation_density` term described above; the two are not combined -- Pokor's model
+has exactly one sink term per species, so `[Recovery]`, when present, replaces that constant
+contribution rather than adding to it.
+
 ## Numerical Considerations id=numerical-considerations
 
 Two numerical-accuracy pitfalls are easy to hit when setting up a new case
@@ -274,6 +315,7 @@ run must resolve a sharp nucleation transient, at the cost of more steps
 - [GenericVacancyVoidGroupedNodalKernel.md]
 - [GenericInterstitialLoopGroupedNodalKernel.md]
 - [PointDefectRecombinationNodalKernel.md]
+- [GenericDislocationRecoveryNodalKernel.md]
 - [GenericClusterDynamicsGroupedNodalKernel.md]
 - [GenericClusterDynamicsNodalKernel.md]
 - [GroupedArrayFunctionIndexIC.md]

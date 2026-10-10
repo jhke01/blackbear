@@ -14,6 +14,7 @@
 
 #include "DefectDynamicsAction.h"
 #include "DefectDynamicsGridAction.h"
+#include "DefectRecoveryAction.h"
 #include "DefectSpeciesAction.h"
 
 #include "FEProblemBase.h"
@@ -42,8 +43,8 @@ DefectDynamicsAction::validParams()
       "A species-organized front end to the grouped defect-dynamics kernels: one or two named "
       "species sub-blocks (e.g. vacancy, interstitial) plus one Grid sub-block build the "
       "grouped array variables, initial conditions, self/opposite-absorption kernels, "
-      "recombination kernels, and monomer/TEM-visible postprocessors, deriving every coupling "
-      "quantity the low-level kernels need instead of asking the user to type it.");
+      "recombination kernels, and monomer/resolvable-radius postprocessors, deriving every "
+      "coupling quantity the low-level kernels need instead of asking the user to type it.");
 
   params.addRequiredParam<Real>("temperature", "Temperature T [K], shared by every species.");
   params.addRequiredParam<Real>(
@@ -61,10 +62,13 @@ DefectDynamicsAction::validParams()
       "cascade_efficiency",
       "Fraction of dpa_rate that survives cascade recombination to produce free monomers "
       "(a monomer-only cascade spectrum; see [theory/defect_dynamics.md]).");
-  params.addRequiredParam<Real>(
+  params.addParam<Real>(
       "dislocation_density",
+      0.0,
       "Dislocation density rho [m^-2] for the background sink, sink = D*Z*rho, applied to every "
-      "species' monomer.");
+      "species' monomer. Required unless a [Recovery] sub-block is given, in which case this "
+      "species' sink instead comes entirely from the time-evolving dislocation density that "
+      "block describes (Pokor et al. 2004, Eqs 7-8), and dislocation_density must be left unset.");
 
   params.addParam<Real>(
       "recombination_radius",
@@ -83,12 +87,6 @@ DefectDynamicsAction::validParams()
       "Defaults to on, matching every validated production input; set to false to isolate "
       "recombination (via recombination_radius) from opposite-species absorption, or to run "
       "two species with no coupling between them at all.");
-
-  params.addParam<Real>(
-      "tem_visible_radius",
-      0.0,
-      "If positive, adds a TEM-visible number-density and average-radius postprocessor pair per "
-      "species, counting only clusters at or above this radius [m].");
 
   return params;
 }
@@ -109,6 +107,18 @@ DefectDynamicsAction::grid() const
     mooseError("[DefectDynamics] found ", grids.size(), " [Grid] sub-blocks; exactly one is "
               "expected.");
   return grids[0];
+}
+
+const DefectRecoveryAction *
+DefectDynamicsAction::recovery() const
+{
+  const auto recoveries = _awh.getActions<DefectRecoveryAction>();
+  if (recoveries.empty())
+    return nullptr;
+  if (recoveries.size() > 1)
+    mooseError("[DefectDynamics] found ", recoveries.size(), " [Recovery] sub-blocks; at most "
+              "one is expected.");
+  return recoveries[0];
 }
 
 std::vector<const DefectSpeciesAction *>
@@ -187,9 +197,13 @@ DefectDynamicsAction::act()
 void
 DefectDynamicsAction::actAddVariables()
 {
-  const auto layout = grid()->layout();
+  const Real atomic_volume = getParam<Real>("atomic_volume");
+  const Real lattice_parameter = getParam<Real>("lattice_parameter");
+  const auto grid_action = grid();
   for (const auto * sp : species())
   {
+    const auto layout =
+        grid_action->layout(sp->resolvedNumClusterSizes(atomic_volume, lattice_parameter));
     InputParameters params = _factory.getValidParams("ArrayMooseVariable");
     params.set<MooseEnum>("family") = "LAGRANGE";
     params.set<MooseEnum>("order") = "FIRST";
@@ -218,6 +232,8 @@ DefectDynamicsAction::actAddFunctions()
 void
 DefectDynamicsAction::actAddICs()
 {
+  const Real atomic_volume = getParam<Real>("atomic_volume");
+  const Real lattice_parameter = getParam<Real>("lattice_parameter");
   const auto grid_action = grid();
   for (const auto * sp : species())
   {
@@ -225,7 +241,7 @@ DefectDynamicsAction::actAddICs()
     params.set<VariableName>("variable") = variableName(*sp);
     params.set<FunctionName>("function") = functionName(*sp);
     params.set<unsigned int>("num_cluster_sizes") =
-        grid_action->getParam<unsigned int>("num_cluster_sizes");
+        sp->resolvedNumClusterSizes(atomic_volume, lattice_parameter);
     params.set<bool>("use_grouping") = true;
     params.set<unsigned int>("explicit_max") = grid_action->getParam<unsigned int>("explicit_max");
     params.set<MooseEnum>("group_spacing") = grid_action->getParam<MooseEnum>("spacing");
@@ -241,6 +257,7 @@ void
 DefectDynamicsAction::actAddNodalKernels()
 {
   const auto grid_action = grid();
+  const auto recovery_action = recovery();
   const auto sp_list = species();
   const Real temperature = getParam<Real>("temperature");
   const Real atomic_volume = getParam<Real>("atomic_volume");
@@ -248,7 +265,17 @@ DefectDynamicsAction::actAddNodalKernels()
   const Real dislocation_density = getParam<Real>("dislocation_density");
   const Real generation = getParam<Real>("dpa_rate") * getParam<Real>("cascade_efficiency");
 
-  const unsigned int num_cluster_sizes = grid_action->getParam<unsigned int>("num_cluster_sizes");
+  // [Recovery], when present, replaces the constant dislocation sink with a time-evolving one
+  // (Pokor et al. 2004, Eqs 7-8 use one un-subscripted dislocation density for both species'
+  // sink terms) -- it does not add to dislocation_density, since Pokor's model has exactly one
+  // sink term per species, not two. A nonzero dislocation_density alongside [Recovery] would
+  // otherwise be silently unused, so warn explicitly instead. (dislocation_density = 0, with or
+  // without [Recovery], remains the existing, documented way to turn the constant sink off.)
+  if (recovery_action && dislocation_density > 0.0)
+    paramWarning("dislocation_density",
+                "dislocation_density is unused when a [Recovery] sub-block is given: the "
+                "entire dislocation sink comes from [Recovery]'s own rho0 instead.");
+
   const unsigned int explicit_max = grid_action->getParam<unsigned int>("explicit_max");
   const auto group_spacing = grid_action->getParam<MooseEnum>("spacing");
   const unsigned int group_linear_width = grid_action->getParam<unsigned int>("linear_width");
@@ -325,7 +352,8 @@ DefectDynamicsAction::actAddNodalKernels()
     InputParameters params = _factory.getValidParams(kernel_type);
     params.set<NonlinearVariableName>("variable") = var_name;
 
-    params.set<unsigned int>("num_cluster_sizes") = num_cluster_sizes;
+    params.set<unsigned int>("num_cluster_sizes") =
+        sp->resolvedNumClusterSizes(atomic_volume, lattice_parameter);
     params.set<bool>("use_grouping") = true;
     params.set<unsigned int>("explicit_max") = explicit_max;
     params.set<MooseEnum>("group_spacing") = group_spacing;
@@ -335,7 +363,11 @@ DefectDynamicsAction::actAddNodalKernels()
     params.set<Real>("group_nonnegative_tolerance_factor") = tolerance_factor;
 
     params.set<Real>("generation") = generation;
-    params.set<Real>("sink") = diffusivity(*sp) * sp->getParam<Real>("Z") * dislocation_density;
+    // When [Recovery] is present, this species' DislocationRecoveryNodalKernel instance (added
+    // below) supplies the entire time-evolving dislocation sink instead; the kernel's own
+    // constant "sink" param is left at its default of zero rather than also being set here.
+    if (!recovery_action)
+      params.set<Real>("sink") = diffusivity(*sp) * sp->getParam<Real>("Z") * dislocation_density;
 
     params.set<Real>("temperature") = temperature;
     params.set<Real>("atomic_volume") = atomic_volume;
@@ -370,7 +402,8 @@ DefectDynamicsAction::actAddNodalKernels()
       params.set<Real>(is_void ? "Em_i_eV" : "Em_v_eV") = opposite->getParam<Real>("Em");
 
       params.set<std::vector<VariableName>>("opposite_coupled_var") = {variableName(*opposite)};
-      params.set<unsigned int>("opposite_num_cluster_sizes") = num_cluster_sizes;
+      params.set<unsigned int>("opposite_num_cluster_sizes") =
+          opposite->resolvedNumClusterSizes(atomic_volume, lattice_parameter);
       params.set<bool>("opposite_use_grouping") = true;
       params.set<unsigned int>("opposite_explicit_max") = explicit_max;
       params.set<MooseEnum>("opposite_group_spacing") = group_spacing;
@@ -412,6 +445,24 @@ DefectDynamicsAction::actAddNodalKernels()
     _problem->addNodalKernel(kernel_type, sp->name() + "_dyn", params);
   }
 
+  if (recovery_action)
+  {
+    for (const auto * sp : sp_list)
+    {
+      InputParameters params = _factory.getValidParams("DislocationRecoveryNodalKernel");
+      params.set<NonlinearVariableName>("variable") = variableName(*sp);
+      params.set<Real>("D0") = sp->getParam<Real>("D0");
+      params.set<Real>("Em_eV") = sp->getParam<Real>("Em");
+      params.set<Real>("temperature") = temperature;
+      params.set<Real>("Z") = sp->getParam<Real>("Z");
+      params.set<Real>("rho0") = recovery_action->getParam<Real>("rho0");
+      params.set<Real>("K") = recovery_action->getParam<Real>("K");
+      params.set<Real>("burgers_vector") = recovery_action->getParam<Real>("burgers_vector");
+      _problem->addNodalKernel(
+          "DislocationRecoveryNodalKernel", sp->name() + "_recovery", params);
+    }
+  }
+
   if (recombination_active)
   {
     for (const auto * sp : {voidSp, loopSp})
@@ -433,9 +484,7 @@ DefectDynamicsAction::actAddPostprocessors()
   const auto grid_action = grid();
   const Real atomic_volume = getParam<Real>("atomic_volume");
   const Real lattice_parameter = getParam<Real>("lattice_parameter");
-  const Real tem_visible_radius = getParam<Real>("tem_visible_radius");
 
-  const unsigned int num_cluster_sizes = grid_action->getParam<unsigned int>("num_cluster_sizes");
   const unsigned int explicit_max = grid_action->getParam<unsigned int>("explicit_max");
   const auto group_spacing = grid_action->getParam<MooseEnum>("spacing");
   const unsigned int group_linear_width = grid_action->getParam<unsigned int>("linear_width");
@@ -446,7 +495,8 @@ DefectDynamicsAction::actAddPostprocessors()
   for (const auto * sp : species())
   {
     const std::string var_name = variableName(*sp);
-    const bool is_void = sp->getParam<MooseEnum>("geometry") == "void";
+    const unsigned int num_cluster_sizes =
+        sp->resolvedNumClusterSizes(atomic_volume, lattice_parameter);
 
     {
       InputParameters params = _factory.getValidParams("ClusterSizeConcentrationGrouped");
@@ -463,25 +513,14 @@ DefectDynamicsAction::actAddPostprocessors()
           "ClusterSizeConcentrationGrouped", sp->name() + "_monomer_concentration", params);
     }
 
-    if (tem_visible_radius <= 0.0)
+    const Real resolvable_radius = sp->getParam<Real>("resolvable_radius");
+    if (resolvable_radius <= 0.0)
       continue;
 
     Real r1, radius_exponent;
-    if (is_void)
-    {
-      r1 = std::cbrt(3.0 * atomic_volume / (4.0 * libMesh::pi));
-      radius_exponent = 1.0 / 3.0;
-    }
-    else
-    {
-      const Real burgers_vector = sp->getParam<Real>("burgers_vector") != 0.0
-                                      ? sp->getParam<Real>("burgers_vector")
-                                      : lattice_parameter / std::sqrt(3.0);
-      r1 = std::sqrt(atomic_volume / (libMesh::pi * burgers_vector));
-      radius_exponent = 0.5;
-    }
-    const unsigned int n_minimum = static_cast<unsigned int>(
-        std::ceil(std::pow(tem_visible_radius / r1, 1.0 / radius_exponent)));
+    sp->monomerRadiusLaw(atomic_volume, lattice_parameter, r1, radius_exponent);
+    const unsigned int n_minimum =
+        DefectSpeciesAction::clusterSizeFromRadius(resolvable_radius, r1, radius_exponent);
 
     {
       InputParameters params = _factory.getValidParams("ClusterTotalDensityGrouped");
@@ -496,7 +535,7 @@ DefectDynamicsAction::actAddPostprocessors()
       params.set<bool>("enforce_group_nonnegative") = enforce_nonnegative;
       params.set<Real>("group_nonnegative_tolerance_factor") = tolerance_factor;
       _problem->addPostprocessor(
-          "ClusterTotalDensityGrouped", sp->name() + "_tem_visible_density", params);
+          "ClusterTotalDensityGrouped", sp->name() + "_resolvable_density", params);
     }
     {
       InputParameters params = _factory.getValidParams("ClusterAverageRadiusGrouped");
@@ -512,7 +551,7 @@ DefectDynamicsAction::actAddPostprocessors()
       params.set<bool>("enforce_group_nonnegative") = enforce_nonnegative;
       params.set<Real>("group_nonnegative_tolerance_factor") = tolerance_factor;
       _problem->addPostprocessor(
-          "ClusterAverageRadiusGrouped", sp->name() + "_tem_visible_avg_radius", params);
+          "ClusterAverageRadiusGrouped", sp->name() + "_resolvable_avg_radius", params);
     }
   }
 }

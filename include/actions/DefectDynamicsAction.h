@@ -18,6 +18,7 @@
 #include "ClusterGroupingLayout.h"
 
 class DefectDynamicsGridAction;
+class DefectRecoveryAction;
 class DefectSpeciesAction;
 
 /**
@@ -25,14 +26,15 @@ class DefectSpeciesAction;
  * kernels (GenericVacancyVoidGroupedNodalKernel, GenericInterstitialLoopGroupedNodalKernel,
  * PointDefectRecombinationNodalKernel). The block declares the physics shared by every species
  * (temperature, atomic_volume, lattice_parameter, cascade generation, dislocation sink,
- * recombination), one [Grid] sub-block (DefectDynamicsGridAction) describing the shared grouped
- * layout, and one or two named species sub-blocks (DefectSpeciesAction, e.g. [vacancy],
- * [interstitial]) describing each species' own diffusivity, capillary energy law, and (for a
- * loop) dislocation bias.
+ * recombination), one [Grid] sub-block (DefectDynamicsGridAction) describing the grouped-tail
+ * SHAPE shared by every species, and one or two named species sub-blocks (DefectSpeciesAction,
+ * e.g. [vacancy], [interstitial]) describing each species' own diffusivity, capillary energy law,
+ * (for a loop) dislocation bias, and its own maximum cluster size (void and loop populations
+ * routinely need very different size caps, so this is not shared via [Grid]).
  *
  * This action builds every final object -- the grouped array variables, their initial
  * conditions, the self/opposite-absorption kernels, the recombination kernels (when two species
- * are present), and the monomer/TEM-visible postprocessors -- deriving every quantity the
+ * are present), and the monomer/resolvable-radius postprocessors -- deriving every quantity the
  * low-level kernels call "opposite_*" from the OTHER species' own block, and deriving the
  * dislocation sink, recombination rate, capillary coefficients, and monomer initial condition
  * from the physics parameters directly, rather than asking the user to type any of them.
@@ -54,6 +56,9 @@ public:
 protected:
   /// This block's [Grid] sub-block, or nullptr if none was given (an error, checked in act()).
   const DefectDynamicsGridAction * grid() const;
+  /// This block's optional [Recovery] sub-block, or nullptr if none was given (zero is the
+  /// normal, default-off case; more than one is an error).
+  const DefectRecoveryAction * recovery() const;
   /// This block's species sub-blocks (one or two), sorted by block name.
   std::vector<const DefectSpeciesAction *> species() const;
 

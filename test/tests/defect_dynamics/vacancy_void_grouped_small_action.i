@@ -3,8 +3,8 @@
 # derivative, and VacancyVoidGroupedNodalKernel's capillary coefficients/initial condition are all
 # generated from the physical parameters below instead of hand-typed. The monomer concentration
 # this produces is bit-identical to vacancy_void_grouped_small_out.csv's (verified directly); the
-# TEM-visible postprocessors below exercise the action's radius-to-n_minimum derivation, which
-# vacancy_void_grouped_small.i's own ClusterAverageRadiusGrouped/ClusterTotalDensityGrouped
+# resolvable-radius postprocessors below exercise the action's radius-to-n_minimum derivation,
+# which vacancy_void_grouped_small.i's own ClusterAverageRadiusGrouped/ClusterTotalDensityGrouped
 # postprocessors (hand-given r1/n_minimum=2) do not test.
 
 [Mesh]
@@ -24,10 +24,8 @@
   dpa_rate = 1.5e-3
   cascade_efficiency = 0.1
   dislocation_density = 0
-  tem_visible_radius = 1.6e-10
 
   [Grid]
-    num_cluster_sizes = 30
     explicit_max = 6
     spacing = linear
     linear_width = 4
@@ -41,6 +39,8 @@
     Ef = 1.7
     Eb2 = 0.5
     exponent = 0.67
+    num_cluster_sizes = 30
+    resolvable_radius = 1.6e-10
   []
 []
 

@@ -21,7 +21,6 @@
   dislocation_density = 0
 
   [Grid]
-    num_cluster_sizes = 30
     explicit_max = 6
     spacing = linear
     linear_width = 4
@@ -33,6 +32,7 @@
     D0 = 1.19073105525e-8
     Em = 0.7644
     exponent = 0.67
+    num_cluster_sizes = 30
   []
 []
 

@@ -22,9 +22,9 @@ DefectDynamicsGridAction::validParams()
   InputParameters params = Action::validParams();
   MooseEnum group_spacing("linear geometric", "linear");
   params.addClassDescription(
-      "The grouped-tail layout shared by every species in the enclosing DefectDynamics block.");
-  params.addRequiredParam<unsigned int>(
-      "num_cluster_sizes", "Maximum physical cluster size represented by the grouped array.");
+      "The grouped-tail shape shared by every species in the enclosing DefectDynamics block. "
+      "The maximum cluster size itself is set per species (DefectSpeciesAction's "
+      "num_cluster_sizes or max_cluster_radius_m), not here.");
   params.addParam<unsigned int>(
       "explicit_max", 100, "Maximum physical cluster size stored explicitly before grouped bins.");
   params.addParam<MooseEnum>(
@@ -51,9 +51,9 @@ DefectDynamicsGridAction::DefectDynamicsGridAction(const InputParameters & param
 }
 
 ClusterGroupingLayout
-DefectDynamicsGridAction::layout() const
+DefectDynamicsGridAction::layout(unsigned int num_cluster_sizes) const
 {
-  return ClusterGroupingLayout(getParam<unsigned int>("num_cluster_sizes"),
+  return ClusterGroupingLayout(num_cluster_sizes,
                                getParam<unsigned int>("explicit_max"),
                                true,
                                getParam<MooseEnum>("spacing").getEnum<ClusterGroupingSpacing>(),

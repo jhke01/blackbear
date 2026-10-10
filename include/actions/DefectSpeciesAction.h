@@ -44,6 +44,30 @@ public:
   /// set; validated in the constructor.
   bool usesDirectCapillaryCoefficients() const { return _uses_direct_capillary_coefficients; }
 
+  /// Whether this species specified num_cluster_sizes directly, or max_cluster_radius_m instead.
+  /// Exactly one of the two must be set; validated in the constructor.
+  bool usesDirectClusterSizeCount() const { return _uses_direct_cluster_size_count; }
+
+  /// This species' own maximum cluster size, resolved from whichever of num_cluster_sizes or
+  /// max_cluster_radius_m was given -- the latter converted via this species' own monomer radius
+  /// law (void or loop, using the enclosing [DefectDynamics] block's atomic_volume and
+  /// lattice_parameter).
+  unsigned int resolvedNumClusterSizes(Real atomic_volume, Real lattice_parameter) const;
+
+  /// r1 (the monomer radius) and the power-law exponent in r_n = r1*n^exponent for this species'
+  /// own geometry (void: exponent 1/3; loop: exponent 1/2, using this species' own burgers_vector,
+  /// defaulting to lattice_parameter/sqrt(3)). Shared by resolvedNumClusterSizes() and by
+  /// DefectDynamicsAction's resolvable_radius -> n_minimum conversion, so both use the identical
+  /// radius law for this species rather than two separately maintained copies of it.
+  void monomerRadiusLaw(Real atomic_volume, Real lattice_parameter, Real & r1, Real & radius_exponent) const;
+
+  /// Inverts r_n = r1*n^radius_exponent to the smallest integer cluster size n whose radius is at
+  /// least `radius`. Shared by resolvedNumClusterSizes() (max_cluster_radius_m) and
+  /// DefectDynamicsAction's resolvable_radius (n_minimum) -- the same inversion, two different
+  /// physical radii.
+  static unsigned int clusterSizeFromRadius(Real radius, Real r1, Real radius_exponent);
+
 protected:
   const bool _uses_direct_capillary_coefficients;
+  const bool _uses_direct_cluster_size_count;
 };

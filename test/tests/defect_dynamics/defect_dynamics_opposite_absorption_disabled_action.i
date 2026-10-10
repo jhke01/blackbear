@@ -28,7 +28,6 @@
   opposite_absorption = false
 
   [Grid]
-    num_cluster_sizes = 30
     explicit_max = 6
     spacing = linear
     linear_width = 4
@@ -43,6 +42,7 @@
     Eb2 = 0.5
     exponent = 0.67
     Z = 1.0
+    num_cluster_sizes = 30
   []
 
   [interstitial]
@@ -57,6 +57,7 @@
     alpha = 0.8
     Z_loop_opposite = 33.0
     alpha_opposite = 0.65
+    num_cluster_sizes = 30
   []
 []
 
