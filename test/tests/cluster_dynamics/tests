@@ -102,10 +102,17 @@
   [cluster_dynamics_grouping_disabled]
     type = CSVDiff
     input = cluster_dynamics_grouped_small.i
-    cli_args = 'GlobalParams/use_grouping=false Outputs/file_base=cluster_dynamics_grouping_disabled_out'
-    csvdiff = 'cluster_dynamics_grouping_disabled_out.csv'
+    # Diffs against gold/cluster_dynamics_50_combined_out.csv -- the SAME gold file
+    # cluster_dynamics_50_combined_ad/_nonad use for the fully explicit, ungrouped
+    # ClusterDynamicsNodalKernel -- not a separately generated file that happens to agree. This
+    # makes Golubov et al. (2001)'s grouping-validity criterion (a) (the grouped equations must be
+    # identical to the ungrouped ones in the limiting case of unit-width bins) an enforced
+    # regression rather than a coincidence a manual diff could happen to catch: if a future change
+    # to either kernel's residual breaks this equivalence, this test fails immediately.
+    cli_args = 'GlobalParams/use_grouping=false Outputs/file_base=cluster_dynamics_50_combined_out'
+    csvdiff = 'cluster_dynamics_50_combined_out.csv'
     design = 'GenericClusterDynamicsGroupedNodalKernel.md'
-    requirement = 'BlackBear shall represent every physical cluster size explicitly when grouping is disabled in the grouped cluster-dynamics interface.'
+    requirement = 'BlackBear shall produce results from the grouped cluster-dynamics interface with grouping disabled that are identical to the fully explicit, ungrouped ClusterDynamicsNodalKernel, satisfying the grouping method\'s validity criterion that grouped and ungrouped equations agree exactly in the limiting case of unit-width bins.'
   []
   [cluster_dynamics_grouped_jacobian_linear]
     type = PetscJacobianTester
@@ -178,6 +185,15 @@
       allow_warnings = false
       detail = 'a warning when an incomplete factorization uses the natural ordering.'
     []
+  []
+  [cluster_dynamics_grouped_conservation]
+    type = CSVDiff
+    input = cluster_dynamics_grouped_conservation.i
+    csvdiff = 'cluster_dynamics_grouped_conservation_out.csv'
+    design = 'ClusterTotalDensityGrouped.md ClusterTotalContentGrouped.md'
+    requirement = 'BlackBear shall conserve the total number of grouped clusters and the total '
+                 'point-defect content accumulated in them, satisfying grouping-validity criteria '
+                 '(b) and (c) of Golubov et al. (2001).'
   []
   [grouped_postprocessor_layout_mismatch]
     type = RunException

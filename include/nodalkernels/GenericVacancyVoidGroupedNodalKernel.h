@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include "ClusterGroupingLayout.h"
-#include "GenericArrayNodalKernel.h"
+#include "GenericDefectFamilyGroupedNodalKernel.h"
+#include "MooseEnum.h"
 
 #include <vector>
 
@@ -39,7 +39,10 @@
  * own radius/bias-factor coefficients. Point-defect recombination and
  * dislocation sink loss are added by a separate coupling kernel
  * (PointDefectRecombinationNodalKernel) and the sink parameter below,
- * respectively.
+ * respectively. All grouping/opposite-coupling logic that this kernel shares
+ * structurally with GenericInterstitialLoopGroupedNodalKernel lives in the
+ * shared CRTP base, GenericDefectFamilyGroupedNodalKernel; this class
+ * supplies only the void-specific leaf physics below.
  *
  * The opposite-absorption terms are non-AD only, for the same reason as
  * PointDefectRecombinationNodalKernel: Coupleable::coupledArrayValue()
@@ -48,29 +51,29 @@
  * could never assemble the resulting cross-variable Jacobian block.
  */
 template <bool is_ad>
-class GenericVacancyVoidGroupedNodalKernelTempl : public GenericArrayNodalKernel<is_ad>
+class GenericVacancyVoidGroupedNodalKernelTempl
+  : public GenericDefectFamilyGroupedNodalKernel<GenericVacancyVoidGroupedNodalKernelTempl<is_ad>,
+                                                 is_ad>
 {
 public:
+  enum class BindingEnergyModel
+  {
+    CAPILLARY = 0,
+    BINDING_ENERGY_TABLE = 1,
+    FORMATION_ENERGY_TABLE = 2
+  };
+
   static InputParameters validParams();
   GenericVacancyVoidGroupedNodalKernelTempl(const InputParameters & parameters);
-
-  virtual void jacobianSetup() override;
-
-protected:
-  virtual void computeQpResidual(GenericRealEigenVector<is_ad> & residual) override;
-  virtual void computeQpJacobian() override;
-  // Not declared "override": ArrayNodalKernel (is_ad = false) declares a virtual
-  // computeQpOffDiagJacobian(unsigned int) to override, but ADArrayNodalKernel (is_ad = true) has
-  // no such member at all -- only the public, non-Qp computeOffDiagJacobian(). The non-AD
-  // specialization below still dispatches correctly through ArrayNodalKernel's own virtual call;
-  // the AD specialization is a plain no-op member, never invoked by the framework, matching the
-  // non-AD-only limitation documented in the class comment above.
-  virtual void computeQpOffDiagJacobian(unsigned int jvar);
 
   Real beta(unsigned int n) const;
   Real alpha(unsigned int n) const;
   Real radius(unsigned int n) const;
   Real formationEnergy(unsigned int n) const;
+  /// Binding energy E_b(n) for a void of size n >= 2: the table-driven value when
+  /// binding_energy_model selects a table and n is within its range, otherwise the capillary-law
+  /// value (the default mode, and the fallback once n exceeds either table's range).
+  Real bindingEnergy(unsigned int n) const;
   Real monomerDiffusivity() const;
   void ensureCoefficientCache() const;
 
@@ -92,23 +95,7 @@ protected:
   Real oppositeBetaOpposite(unsigned int n) const;
   void ensureOppositeCoefficientCache() const;
 
-  template <typename Scalar>
-  void fillConcentrationCache(const std::vector<Scalar> & state,
-                              std::vector<Scalar> & concentration) const;
-
-  template <typename Scalar>
-  void fillFluxCache(const std::vector<Scalar> & concentration,
-                     const std::vector<Scalar> & opposite_concentration,
-                     Scalar opposite_monomer,
-                     std::vector<Scalar> & flux) const;
-
-  template <typename Scalar>
-  void computeGroupedResidualFromState(const std::vector<Scalar> & state,
-                                       const std::vector<Scalar> & opposite_state,
-                                       std::vector<Scalar> & residual_values) const;
-
-  const Real _generation;
-  const Real _sink;
+protected:
   const Real _temperature;
   const Real _D0;
   const Real _Q;
@@ -119,16 +106,12 @@ protected:
   const Real _energy_coefficient_eV;
   const Real _energy_constant_eV;
 
-  const unsigned int _num_cluster_sizes;
-  const bool _use_grouping;
-  const unsigned int _explicit_max;
-  const ClusterGroupingSpacing _group_spacing;
-  const unsigned int _group_linear_width;
-  const Real _group_geometric_ratio;
-  const bool _enforce_group_nonnegative;
-  const Real _group_nonnegative_tolerance_factor;
-
-  const ClusterGroupingLayout _layout;
+  /// Selected binding-energy model: capillary (default/fallback), or a direct table.
+  const BindingEnergyModel _binding_energy_model;
+  /// Direct binding energies [eV] indexed as n = index + 2.
+  const std::vector<Real> _binding_energy_table_eV;
+  /// Formation energies [eV] indexed as n = index + 1.
+  const std::vector<Real> _formation_energy_table_eV;
 
   /// Opposite-species (interstitial) diffusivity prefactor/migration energy, for the void's own
   /// absorption of an interstitial monomer (Piece A).
@@ -143,38 +126,8 @@ protected:
   const Real _opposite_z_loop_v;
   const Real _opposite_alpha_loop_v;
 
-  const unsigned int _opposite_num_cluster_sizes;
-  const bool _opposite_use_grouping;
-  const unsigned int _opposite_explicit_max;
-  const ClusterGroupingSpacing _opposite_group_spacing;
-  const unsigned int _opposite_group_linear_width;
-  const Real _opposite_group_geometric_ratio;
-  const bool _opposite_enforce_group_nonnegative;
-  const Real _opposite_group_nonnegative_tolerance_factor;
-
-  const ClusterGroupingLayout _opposite_layout;
-
-  const ArrayVariableValue & _opposite_array;
-  const unsigned int _opposite_var_num;
-  /// Whether opposite_coupled_var was actually provided. When false, D0_i/opposite_* default to
-  /// values (D0_i = 0, opposite_num_cluster_sizes = 1) that make every opposite-absorption term
-  /// evaluate to exactly zero, so the kernel reduces to its pre-existing self-reaction-only
-  /// behavior without any extra branching in the residual/Jacobian -- this flag only gates the
-  /// constructor's physical-validity checks on the opposite-side parameters.
-  const bool _opposite_coupling_active;
-
-  mutable std::vector<Real> _beta_cache;
-  mutable std::vector<Real> _alpha_cache;
-  mutable std::vector<Real> _beta_opposite_cache;
-  mutable unsigned int _cache_size = 0;
-
-  mutable std::vector<Real> _opposite_beta_opposite_cache;
-  mutable unsigned int _opposite_cache_size = 0;
-
-  /// Whether the preconditioner factorization ordering has been checked
-  bool _checked_factor_ordering = false;
-
-  usingGenericArrayNodalKernelMembers;
+  usingGenericDefectFamilyGroupedNodalKernelMembers(GenericVacancyVoidGroupedNodalKernelTempl<is_ad>,
+                                                    is_ad);
 };
 
 typedef GenericVacancyVoidGroupedNodalKernelTempl<false> VacancyVoidGroupedNodalKernel;

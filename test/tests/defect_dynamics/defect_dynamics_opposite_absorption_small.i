@@ -88,7 +88,7 @@
     variable = vacancy_clusters
 
     generation = 1.5e-4
-    sink = 7330.943459224491
+    sink = 2.2521186324898173
 
     temperature = 573
     D0_v = 1.19073105525e-8

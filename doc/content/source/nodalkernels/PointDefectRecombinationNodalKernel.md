@@ -4,6 +4,9 @@
 
 ## Description
 
+See [theory/defect_dynamics.md] for a full derivation connecting this
+kernel's equation to the rest of the defect-dynamics model.
+
 `PointDefectRecombinationNodalKernel` adds point-defect recombination loss to
 one defect family's monomer component (array component 0), coupled to the
 other family's own array variable through
@@ -72,5 +75,6 @@ consideration this kernel's two-variable coupling does not change.
 
 ## See Also
 
+- [theory/defect_dynamics.md]
 - [GenericVacancyVoidGroupedNodalKernel.md]
 - [GenericInterstitialLoopGroupedNodalKernel.md]

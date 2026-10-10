@@ -16,6 +16,14 @@ sums to zero and the bin contribution is $\Delta L_0$. Other bins are summed
 over their reconstructed physical concentrations. When `atomic_volume` is
 provided in m$^3$, the result is reported in `#/m^3`.
 
+This postprocessor provides the moment ($\sum C_n$) needed to check
+[!citep](golubov2001)'s grouping-validity criterion (b), that a grouping
+method must conserve the total number of clusters, $dN/dt = J(1,t)$; see
+[theory/defect_dynamics.md] for the flux definition $J_n$.
+[ClusterTotalContentGrouped.md] provides the companion moment
+($\sum n C_n$) for criterion (c), conservation of the total point-defect
+content.
+
 The grouping layout and nonnegative-reconstruction parameters must match those
 used by [GenericClusterDynamicsGroupedNodalKernel.md].
 
@@ -28,3 +36,8 @@ used by [GenericClusterDynamicsGroupedNodalKernel.md].
 !syntax inputs /Postprocessors/ClusterTotalDensityGrouped
 
 !syntax children /Postprocessors/ClusterTotalDensityGrouped
+
+## See Also
+
+- [ClusterTotalContentGrouped.md]
+- [theory/defect_dynamics.md]

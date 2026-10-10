@@ -24,5 +24,9 @@ associateSyntax(Syntax & syntax, ActionFactory & /*action_factory*/)
   registerSyntax("EqualValueEmbeddedConstraintAction",
                  "Constraints/EqualValueEmbeddedConstraint/*");
   registerSyntax("GroupedClusterVariableAction", "GroupedVariables/*");
+
+  registerSyntax("DefectDynamicsAction", "DefectDynamics");
+  registerSyntax("DefectDynamicsGridAction", "DefectDynamics/Grid");
+  registerSyntax("DefectSpeciesAction", "DefectDynamics/*");
 }
 } // namespace BlackBear

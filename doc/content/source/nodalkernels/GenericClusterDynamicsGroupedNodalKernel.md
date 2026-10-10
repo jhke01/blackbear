@@ -93,6 +93,15 @@ The limiter is useful when a wide bin develops a steep first moment, but it
 also introduces a nonsmooth residual. Group widths should therefore be chosen
 with both accuracy and nonlinear convergence in mind.
 
+This is a deliberate departure from the exact unclipped linear reconstruction
+of [!citep](golubov2001)'s grouping method, active by default
+(`enforce_group_nonnegative = true`): that paper's own moment equations
+(reproduced in [theory/defect_dynamics.md]) assume $C_n = L_0 + L_1(n-\bar n)$
+is used unmodified, which can predict a negative concentration at a bin
+endpoint when $L_1$ is large relative to $L_0$. The limiter trades an exact
+match to those equations in that regime for a numerically well-behaved,
+nonnegative reconstruction.
+
 ## Rate Models
 
 The grouped and ungrouped kernels provide the same `simple` and

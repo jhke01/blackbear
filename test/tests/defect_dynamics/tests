@@ -61,4 +61,114 @@
     design = 'GenericVacancyVoidGroupedNodalKernel.md GenericInterstitialLoopGroupedNodalKernel.md'
     requirement = 'BlackBear shall provide an analytical on- and off-diagonal Jacobian for the opposite-species absorption terms coupling the VacancyVoidGroupedNodalKernel and InterstitialLoopGroupedNodalKernel.'
   []
+
+  [vacancy_void_energy_capillary]
+    type = CSVDiff
+    input = vacancy_void_energy_models.i
+    csvdiff = 'vacancy_void_energy_models_out.csv'
+    design = 'GenericVacancyVoidGroupedNodalKernel.md'
+    requirement = 'BlackBear shall compute void emission rates from the capillary binding-energy model by default.'
+  []
+  [vacancy_void_energy_binding_table]
+    type = CSVDiff
+    input = vacancy_void_energy_models.i
+    cli_args = 'NodalKernels/vacancy_dyn/binding_energy_model=binding_energy_table Outputs/file_base=vacancy_void_energy_binding_table_out'
+    csvdiff = 'vacancy_void_energy_binding_table_out.csv'
+    design = 'GenericVacancyVoidGroupedNodalKernel.md'
+    requirement = 'BlackBear shall compute void emission rates from a direct binding-energy table for small cluster sizes, using Soneda and Diaz de la Rubia (1998) Table 1 vacancy data, falling back to the capillary law for sizes beyond the table.'
+  []
+  [vacancy_void_energy_formation_table]
+    type = CSVDiff
+    input = vacancy_void_energy_models.i
+    cli_args = 'NodalKernels/vacancy_dyn/binding_energy_model=formation_energy_table Outputs/file_base=vacancy_void_energy_formation_table_out'
+    csvdiff = 'vacancy_void_energy_formation_table_out.csv'
+    design = 'GenericVacancyVoidGroupedNodalKernel.md'
+    requirement = 'BlackBear shall derive void emission rates from a direct formation-energy table for small cluster sizes, falling back to the capillary law for sizes beyond the table, reproducing the same binding-energy-table result when the two tables encode the same binding energies.'
+  []
+
+  [interstitial_loop_energy_capillary]
+    type = CSVDiff
+    input = interstitial_loop_energy_models.i
+    csvdiff = 'interstitial_loop_energy_models_out.csv'
+    design = 'GenericInterstitialLoopGroupedNodalKernel.md'
+    requirement = 'BlackBear shall compute loop emission rates from the capillary binding-energy model by default.'
+  []
+  [interstitial_loop_energy_binding_table]
+    type = CSVDiff
+    input = interstitial_loop_energy_models.i
+    cli_args = 'NodalKernels/interstitial_dyn/binding_energy_model=binding_energy_table Outputs/file_base=interstitial_loop_energy_binding_table_out'
+    csvdiff = 'interstitial_loop_energy_binding_table_out.csv'
+    design = 'GenericInterstitialLoopGroupedNodalKernel.md'
+    requirement = 'BlackBear shall compute loop emission rates from a direct binding-energy table for small cluster sizes, using Soneda and Diaz de la Rubia (1998) Table 1 interstitial data, falling back to the capillary law for sizes beyond the table.'
+  []
+  [interstitial_loop_energy_formation_table]
+    type = CSVDiff
+    input = interstitial_loop_energy_models.i
+    cli_args = 'NodalKernels/interstitial_dyn/binding_energy_model=formation_energy_table Outputs/file_base=interstitial_loop_energy_formation_table_out'
+    csvdiff = 'interstitial_loop_energy_formation_table_out.csv'
+    design = 'GenericInterstitialLoopGroupedNodalKernel.md'
+    requirement = 'BlackBear shall derive loop emission rates from a direct formation-energy table for small cluster sizes, falling back to the capillary law for sizes beyond the table, reproducing the same binding-energy-table result when the two tables encode the same binding energies.'
+  []
+
+  [vacancy_void_direct_capillary_action]
+    type = CSVDiff
+    input = vacancy_void_direct_capillary_action.i
+    csvdiff = 'vacancy_void_direct_capillary_action_out.csv'
+    design = 'DefectDynamicsAction.md DefectSpeciesAction.md'
+    requirement = 'BlackBear shall build a grouped void cluster-dynamics problem from a [DefectDynamics] block whose capillary formation-energy law is given directly as capillary_coefficient_eV/capillary_constant_eV instead of derived from Ef/Eb2, reproducing the same physics as the equivalent Ef/Eb2 input.'
+    allow_warnings = false
+  []
+  [defect_species_capillary_both_set_error]
+    type = RunException
+    input = vacancy_void_grouped_small_action.i
+    cli_args = "DefectDynamics/vacancy/capillary_coefficient_eV=2.0 DefectDynamics/vacancy/capillary_constant_eV=-0.3"
+    expect_err = 'cannot set both \{Ef, Eb2\} and \{capillary_coefficient_eV, capillary_constant_eV\}'
+    design = 'DefectSpeciesAction.md'
+    requirement = 'BlackBear shall error when a [DefectDynamics] species sub-block sets both Ef/Eb2 and capillary_coefficient_eV/capillary_constant_eV, since exactly one of the two ways to specify the capillary formation-energy law is allowed.'
+  []
+  [defect_species_capillary_neither_set_error]
+    type = RunException
+    input = defect_species_capillary_neither_set_error.i
+    expect_err = 'requires either \{Ef, Eb2\} or \{capillary_coefficient_eV, capillary_constant_eV\}'
+    design = 'DefectSpeciesAction.md'
+    requirement = 'BlackBear shall error when a [DefectDynamics] species sub-block sets neither Ef/Eb2 nor capillary_coefficient_eV/capillary_constant_eV, since exactly one of the two ways to specify the capillary formation-energy law is required.'
+  []
+
+  [vacancy_void_grouped_small_action]
+    type = CSVDiff
+    input = vacancy_void_grouped_small_action.i
+    csvdiff = 'vacancy_void_grouped_small_action_out.csv'
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall build a single-species grouped void cluster-dynamics problem from a [DefectDynamics] block, deriving the capillary coefficients, monomer initial condition, and TEM-visible postprocessor cutoffs from physical parameters instead of requiring them to be typed directly.'
+    allow_warnings = false
+  []
+  [interstitial_loop_grouped_small_action]
+    type = CSVDiff
+    input = interstitial_loop_grouped_small_action.i
+    csvdiff = 'interstitial_loop_grouped_small_action_out.csv'
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall build a single-species grouped loop cluster-dynamics problem from a [DefectDynamics] block.'
+    allow_warnings = false
+  []
+  [defect_dynamics_opposite_absorption_small_action]
+    type = CSVDiff
+    input = defect_dynamics_opposite_absorption_small_action.i
+    csvdiff = 'defect_dynamics_opposite_absorption_small_action_out.csv'
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall build a two-species grouped cluster-dynamics problem coupled through opposite-species absorption from a [DefectDynamics] block without a point-defect recombination kernel when recombination_radius is not given, deriving every opposite-species kernel parameter (diffusivity, dislocation bias, grid) from the other species block instead of requiring it to be typed on both kernels.'
+  []
+  [defect_dynamics_opposite_absorption_disabled_action]
+    type = CSVDiff
+    input = defect_dynamics_opposite_absorption_disabled_action.i
+    csvdiff = 'defect_dynamics_opposite_absorption_disabled_action_out.csv'
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall build a two-species grouped cluster-dynamics problem with opposite-species absorption disabled via opposite_absorption = false, reducing each species to self-reaction-only behavior with no coupling to the other species.'
+  []
+  [point_defect_recombination_small_action]
+    type = CSVDiff
+    input = point_defect_recombination_small_action.i
+    csvdiff = 'point_defect_recombination_small_action_out.csv'
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall add symmetric point-defect recombination kernels to a two-species [DefectDynamics] block when recombination_radius is given, deriving the recombination rate from the two species diffusivities instead of requiring it to be typed directly.'
+  []
 []

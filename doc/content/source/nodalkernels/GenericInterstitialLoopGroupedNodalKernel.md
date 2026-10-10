@@ -4,6 +4,10 @@
 
 ## Description
 
+See [theory/defect_dynamics.md] for a full derivation connecting this
+kernel's equations to [GenericVacancyVoidGroupedNodalKernel.md] and
+[PointDefectRecombinationNodalKernel.md].
+
 `InterstitialLoopGroupedNodalKernel` solves the self-reaction (absorption and
 thermal emission) terms of an interstitial-loop population balance, using the
 same grouped L0/L1 representation as
@@ -60,8 +64,13 @@ $Z_{i,0}$, $Z_{loop,i}$, and $\alpha_{loop,i}$ are
 interpolates from the small-loop bias $Z_{i,0}$ to the large-loop bias
 $Z_{loop,i}$ as $n$ grows.
 
-Thermal emission follows detailed balance from a capillary-law formation
-energy, with the same structure as
+Thermal emission follows detailed balance from a binding energy $E_b(n)$,
+
+!equation
+\alpha_n = \beta_{n-1}\exp\left(-\frac{E_b(n)}{k_BT}\right).
+
+By default (and always as the fallback described below), $E_b(n)$ comes from
+a capillary-law formation energy, with the same structure as
 [GenericVacancyVoidGroupedNodalKernel.md]'s void emission model but the
 loop's own exponent and coefficients:
 
@@ -69,8 +78,33 @@ loop's own exponent and coefficients:
 E_f(n) = A_i n^{p_i} + C_i,
 \qquad
 E_b(n) = E_{form,i} - \left[E_f(n)-E_f(n-1)\right],
-\qquad
-\alpha_n = \beta_{n-1}\exp\left(-\frac{E_b(n)}{k_BT}\right).
+
+where $E_{form,i}$ is
+[!param](/NodalKernels/InterstitialLoopGroupedNodalKernel/formation_energy_eV).
+These, together with $A_i$/$C_i$/$p_i$, are always required, in every
+[!param](/NodalKernels/InterstitialLoopGroupedNodalKernel/binding_energy_model)
+setting -- see below.
+
+## Direct Binding- or Formation-Energy Data
+
+[!param](/NodalKernels/InterstitialLoopGroupedNodalKernel/binding_energy_model)
+selects how $E_b(n)$ is obtained, with the same three modes, table indexing,
+and capillary-fallback behavior as
+[GenericVacancyVoidGroupedNodalKernel.md]'s own
+`binding_energy_model`/`binding_energy_table_eV`/`formation_energy_table_eV` --
+see that page for the full discussion of why the fallback (rather than
+[GenericClusterDynamicsNodalKernel.md]'s hard error past the table's end) is
+needed at this model's scale.
+
+Both table modes are exercised in
+
+!listing test/tests/defect_dynamics/interstitial_loop_energy_models.i
+
+using the real MD binding energies from Soneda and Diaz de la Rubia (1998),
+*Philosophical Magazine A* 78:5, 995-1019 -- their Table 1, interstitial
+clusters $n=2..10$ -- with
+[!param](/NodalKernels/InterstitialLoopGroupedNodalKernel/num_cluster_sizes) = 30
+to also exercise the capillary fallback beyond $n=10$.
 
 ## Opposite-Species Absorption
 
@@ -161,6 +195,7 @@ The opposite-species absorption terms are exercised in
 
 ## See Also
 
+- [theory/defect_dynamics.md]
 - [GenericClusterDynamicsGroupedNodalKernel.md]
 - [GenericVacancyVoidGroupedNodalKernel.md]
 - [PointDefectRecombinationNodalKernel.md]
