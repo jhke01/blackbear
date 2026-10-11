@@ -76,6 +76,51 @@
     design = 'DefectDynamicsAction.md'
     requirement = 'BlackBear shall warn when a [DefectDynamics] block sets both dislocation_density and a [Recovery] sub-block, since dislocation_density is unused in that case.'
   []
+  [cascade_spectrum_jacobian]
+    type = PetscJacobianTester
+    input = cascade_spectrum_jacobian.i
+    run_sim = True
+    ratio_tol = 1e-7
+    design = 'GenericCascadeSpectrumNodalKernel.md'
+    requirement = 'BlackBear shall provide an analytical Jacobian for the CascadeSpectrumNodalKernel, whose entries are all exactly zero since its residual is a constant source with no dependence on the solution.'
+  []
+  [cascade_spectrum_small]
+    type = CSVDiff
+    input = cascade_spectrum_small.i
+    csvdiff = 'cascade_spectrum_small_out.csv'
+    design = 'GenericCascadeSpectrumNodalKernel.md'
+    requirement = 'BlackBear shall seed cluster sizes 2, 3, and 4 directly at a rate of generation*f_n/n using the CascadeSpectrumNodalKernel, instead of adding the entire generation rate to the monomer row.'
+  []
+  [cascade_spectrum_conservation]
+    type = CSVDiff
+    input = cascade_spectrum_conservation.i
+    csvdiff = 'cascade_spectrum_conservation_out.csv'
+    design = 'GenericCascadeSpectrumNodalKernel.md'
+    requirement = 'BlackBear shall conserve total point-defect production (the weighted sum sum_n(n*C_n)) at exactly the generation rate when cascade seeding splits that rate across the monomer and cluster sizes 2, 3, and 4, regardless of how the fractions are split.'
+  []
+  [defect_dynamics_cascade_action]
+    type = CSVDiff
+    input = defect_dynamics_cascade_action.i
+    csvdiff = 'defect_dynamics_cascade_action_out.csv'
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall build a two-species grouped cluster-dynamics problem from a [DefectDynamics] block in which each species seeds cluster sizes 2, 3, and 4 directly by setting a nonzero cascade_f2/cascade_f3/cascade_f4, correspondingly reducing that species own monomer row generation term.'
+  []
+  [defect_dynamics_cascade_fraction_sum_error]
+    type = RunException
+    input = vacancy_void_grouped_small_action.i
+    cli_args = "DefectDynamics/vacancy/cascade_f2=0.6 DefectDynamics/vacancy/cascade_f3=0.6"
+    expect_err = 'requires cascade_f2 \+ cascade_f3 \+ cascade_f4 <= 1'
+    design = 'DefectSpeciesAction.md'
+    requirement = 'BlackBear shall error when a [DefectDynamics] species sub-block sets cascade_f2 + cascade_f3 + cascade_f4 greater than 1, since the monomer own remaining fraction of the generation rate would otherwise go negative.'
+  []
+  [defect_dynamics_cascade_explicit_max_error]
+    type = RunException
+    input = vacancy_void_grouped_small_action.i
+    cli_args = "DefectDynamics/Grid/explicit_max=3 DefectDynamics/vacancy/cascade_f2=0.1"
+    expect_err = "requires \[Grid\]'s explicit_max >= 4 when species 'vacancy' has cascade seeding active"
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall error when a [DefectDynamics] species sub-block has cascade seeding active but [Grid] own explicit_max is below 4, since cluster sizes 2-4 would not all have explicit array components to seed.'
+  []
   [defect_dynamics_opposite_absorption_small]
     type = CSVDiff
     input = defect_dynamics_opposite_absorption_small.i

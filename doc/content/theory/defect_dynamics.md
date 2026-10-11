@@ -278,6 +278,33 @@ When no `[Recovery]` sub-block is given, a species' sink stays exactly the const
 has exactly one sink term per species, so `[Recovery]`, when present, replaces that constant
 contribution rather than adding to it.
 
+## Cascade Spectrum
+
+Every monomer-only input to this model puts the entire generation rate $G$ (dpa_rate times
+cascade_efficiency) into $G_1$, the monomer source term in the self-absorption section above.
+Pokor et al. (2004) Eqs 1a-1e instead seed clusters of size 2, 3, and 4 directly from the cascade,
+with each size's own fraction ($f_2$, $f_3$, $f_4$) of $G$ going to that size and the monomer
+getting the remainder:
+
+!equation
+G_1 = G(1 - f_2 - f_3 - f_4), \qquad G(n) = G f_n, \quad n \in \{2, 3, 4\}.
+
+Taken literally, $G(n) = G f_n$ seeds $n$ point defects at size $n$, so the total point-defect
+production rate becomes $G_1 + 2 G(2) + 3 G(3) + 4 G(4) = G(1 + f_2 + 2f_3 + 3f_4)$ -- larger than
+$G$ itself whenever any fraction is nonzero. [GenericCascadeSpectrumNodalKernel.md] instead
+divides each size's source by its own size,
+
+!equation
+G(n) = \frac{G f_n}{n}, \qquad n \in \{2, 3, 4\},
+
+so that $n \times G(n) = G f_n$ contributes exactly its own fraction of the total rate, keeping
+total point-defect production conserved at exactly $G$ regardless of how the fractions split it.
+Since $f_2$, $f_3$, and $f_4$ are genuinely per-species numbers in Pokor's own equations (distinct
+values for vacancies and interstitials), they are set per species rather than shared; a species
+activates cascade seeding simply by setting $f_2 + f_3 + f_4 > 0$ on its own sub-block, with no
+separate switch. Like dislocation recovery above, this term depends only on constants, not on the
+solution, so its Jacobian contribution is exactly zero and the kernel is AD-safe.
+
 ## Numerical Considerations id=numerical-considerations
 
 Two numerical-accuracy pitfalls are easy to hit when setting up a new case
@@ -316,6 +343,7 @@ run must resolve a sharp nucleation transient, at the cost of more steps
 - [GenericInterstitialLoopGroupedNodalKernel.md]
 - [PointDefectRecombinationNodalKernel.md]
 - [GenericDislocationRecoveryNodalKernel.md]
+- [GenericCascadeSpectrumNodalKernel.md]
 - [GenericClusterDynamicsGroupedNodalKernel.md]
 - [GenericClusterDynamicsNodalKernel.md]
 - [GroupedArrayFunctionIndexIC.md]

@@ -158,6 +158,23 @@ DefectSpeciesAction::validParams()
       "(e.g. TEM). Left at zero (the default), no such postprocessors are added for this "
       "species.");
 
+  params.addParam<Real>(
+      "cascade_f2",
+      0.0,
+      "Fraction of this species' generation rate seeded directly as dimers (cluster size 2) "
+      "instead of monomers (Pokor et al. 2004, Eq 1). Only has an effect when the enclosing "
+      "DefectDynamics block has a [Cascade] sub-block; see cascade_f3, cascade_f4.");
+  params.addParam<Real>(
+      "cascade_f3",
+      0.0,
+      "Fraction of this species' generation rate seeded directly as cluster size 3. See "
+      "cascade_f2.");
+  params.addParam<Real>(
+      "cascade_f4",
+      0.0,
+      "Fraction of this species' generation rate seeded directly as cluster size 4. See "
+      "cascade_f2.");
+
   return params;
 }
 
@@ -213,6 +230,16 @@ DefectSpeciesAction::DefectSpeciesAction(const InputParameters & params)
     paramWarning("burgers_vector",
                 "burgers_vector has no effect for geometry = void: only a loop's radius and "
                 "bias laws use it.");
+
+  const Real cascade_f2 = getParam<Real>("cascade_f2");
+  const Real cascade_f3 = getParam<Real>("cascade_f3");
+  const Real cascade_f4 = getParam<Real>("cascade_f4");
+  if (cascade_f2 < 0.0 || cascade_f3 < 0.0 || cascade_f4 < 0.0)
+    mooseError("DefectSpeciesAction requires cascade_f2, cascade_f3, and cascade_f4 to be "
+              "nonnegative.");
+  if (cascade_f2 + cascade_f3 + cascade_f4 > 1.0)
+    mooseError("DefectSpeciesAction requires cascade_f2 + cascade_f3 + cascade_f4 <= 1, so the "
+              "monomer's own remaining fraction of the generation rate does not go negative.");
 }
 
 void

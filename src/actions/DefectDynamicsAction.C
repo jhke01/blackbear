@@ -265,6 +265,32 @@ DefectDynamicsAction::actAddNodalKernels()
   const Real dislocation_density = getParam<Real>("dislocation_density");
   const Real generation = getParam<Real>("dpa_rate") * getParam<Real>("cascade_efficiency");
 
+  // A species activates cascade seeding (Pokor et al. 2004, Eqs 1a-1e) simply by setting a
+  // nonzero cascade_f2/cascade_f3/cascade_f4 -- the same "nonzero means on" idiom already used by
+  // recombination_radius and dislocation_density, independent per species.
+  auto cascadeActive = [](const DefectSpeciesAction & sp)
+  {
+    return sp.getParam<Real>("cascade_f2") + sp.getParam<Real>("cascade_f3") +
+               sp.getParam<Real>("cascade_f4") >
+           0.0;
+  };
+
+  // Cascade seeding (sizes 2-4) needs explicit (ungrouped) components for those sizes to exist
+  // at all; checked once here (shared [Grid] shape) plus per species (its own resolved cap) for
+  // whichever species has cascade seeding active.
+  for (const auto * sp : sp_list)
+  {
+    if (!cascadeActive(*sp))
+      continue;
+    if (grid_action->getParam<unsigned int>("explicit_max") < 4)
+      mooseError("[DefectDynamics] requires [Grid]'s explicit_max >= 4 when species '",
+                sp->name(), "' has cascade seeding active, but explicit_max = ",
+                grid_action->getParam<unsigned int>("explicit_max"), ".");
+    if (sp->resolvedNumClusterSizes(atomic_volume, lattice_parameter) < 4)
+      mooseError("[DefectDynamics] requires species '", sp->name(), "' to represent at least "
+                "cluster size 4 when its own cascade_f2/cascade_f3/cascade_f4 are active.");
+  }
+
   // [Recovery], when present, replaces the constant dislocation sink with a time-evolving one
   // (Pokor et al. 2004, Eqs 7-8 use one un-subscripted dislocation density for both species'
   // sink terms) -- it does not add to dislocation_density, since Pokor's model has exactly one
@@ -362,7 +388,15 @@ DefectDynamicsAction::actAddNodalKernels()
     params.set<bool>("enforce_group_nonnegative") = enforce_nonnegative;
     params.set<Real>("group_nonnegative_tolerance_factor") = tolerance_factor;
 
-    params.set<Real>("generation") = generation;
+    // When this species has cascade seeding active, its own CascadeSpectrumNodalKernel instance
+    // (added below) seeds cluster sizes 2-4 directly; the monomer's own share of the generation
+    // rate shrinks by the same fractions so total point-defect production stays conserved at
+    // exactly "generation" (Pokor et al. 2004, Eqs 1a-1e).
+    Real monomer_generation = generation;
+    if (cascadeActive(*sp))
+      monomer_generation *= 1.0 - sp->getParam<Real>("cascade_f2") -
+                            sp->getParam<Real>("cascade_f3") - sp->getParam<Real>("cascade_f4");
+    params.set<Real>("generation") = monomer_generation;
     // When [Recovery] is present, this species' DislocationRecoveryNodalKernel instance (added
     // below) supplies the entire time-evolving dislocation sink instead; the kernel's own
     // constant "sink" param is left at its default of zero rather than also being set here.
@@ -461,6 +495,19 @@ DefectDynamicsAction::actAddNodalKernels()
       _problem->addNodalKernel(
           "DislocationRecoveryNodalKernel", sp->name() + "_recovery", params);
     }
+  }
+
+  for (const auto * sp : sp_list)
+  {
+    if (!cascadeActive(*sp))
+      continue;
+    InputParameters params = _factory.getValidParams("CascadeSpectrumNodalKernel");
+    params.set<NonlinearVariableName>("variable") = variableName(*sp);
+    params.set<Real>("generation") = generation;
+    params.set<Real>("f2") = sp->getParam<Real>("cascade_f2");
+    params.set<Real>("f3") = sp->getParam<Real>("cascade_f3");
+    params.set<Real>("f4") = sp->getParam<Real>("cascade_f4");
+    _problem->addNodalKernel("CascadeSpectrumNodalKernel", sp->name() + "_cascade", params);
   }
 
   if (recombination_active)

@@ -6,14 +6,16 @@
 
 The `DefectDynamics` block is a species-organized front end to the grouped defect-dynamics
 kernels ([GenericVacancyVoidGroupedNodalKernel.md], [GenericInterstitialLoopGroupedNodalKernel.md],
-[PointDefectRecombinationNodalKernel.md], [GenericDislocationRecoveryNodalKernel.md]; see
-[theory/defect_dynamics.md] for the underlying equations). One or two named species sub-blocks
-(commonly `[vacancy]` and `[interstitial]`, though the name is only a label) describe each
-species' own diffusivity, capillary formation-energy law, (for a loop) dislocation bias, and its
-own maximum cluster size; one `[Grid]` sub-block describes the grouped-tail *shape* (explicit
-size, bin spacing, growth ratio) shared by both species, and one optional `[Recovery]` sub-block
-describes a dislocation network shared by both species whose density evolves in time instead of
-staying fixed.
+[PointDefectRecombinationNodalKernel.md], [GenericDislocationRecoveryNodalKernel.md],
+[GenericCascadeSpectrumNodalKernel.md]; see [theory/defect_dynamics.md] for the underlying
+equations). One or two named species sub-blocks (commonly `[vacancy]` and `[interstitial]`,
+though the name is only a label) describe each species' own diffusivity, capillary
+formation-energy law, (for a loop) dislocation bias, and its own maximum cluster size; one
+`[Grid]` sub-block describes the grouped-tail *shape* (explicit size, bin spacing, growth ratio)
+shared by both species, and one optional `[Recovery]` sub-block describes a dislocation network
+shared by both species whose density evolves in time instead of staying fixed. A species also
+turns on cascade seeding of cluster sizes 2-4 simply by setting a nonzero cascade fraction on its
+own sub-block.
 
 Void and loop populations routinely grow to very different physical sizes under the same
 irradiation conditions, so the maximum cluster size itself is deliberately NOT part of the
@@ -85,6 +87,30 @@ silently being ignored. `[Recovery]`'s own `burgers_vector` is a property of the
 network itself, distinct from any loop species' own geometric
 [!param](/DefectDynamics/DefectSpeciesAction/burgers_vector).
 
+## Cascade Spectrum
+
+By default, each species' entire generation rate goes to the monomer row. A species turns on
+direct seeding of cluster sizes 2, 3, and 4 simply by setting a nonzero
+[!param](/DefectDynamics/DefectSpeciesAction/cascade_f2),
+[!param](/DefectDynamics/DefectSpeciesAction/cascade_f3), or
+[!param](/DefectDynamics/DefectSpeciesAction/cascade_f4) on its own sub-block, following Pokor
+et al. (2004) Eqs 1a-1e (see [theory/defect_dynamics.md] for the conservation-convention
+derivation):
+
+```
+[vacancy]
+  ...
+  cascade_f2 = 0.2   # fraction of generation seeded directly as dimers
+  cascade_f3 = 0.05  # fraction seeded as cluster size 3
+  cascade_f4 = 0.02  # fraction seeded as cluster size 4
+[]
+```
+
+For each species whose `cascade_f2`/`cascade_f3`/`cascade_f4` sum to more than zero, the block
+adds one [GenericCascadeSpectrumNodalKernel.md] instance and reduces that species' own monomer
+`generation` term by the same fractions so total point-defect production stays conserved. The
+two species are independent -- one can seed cascade sizes while the other stays monomer-only.
+
 ## Input Options at a Glance
 
 Several quantities in this block can be given in more than one way. Each row below is a
@@ -106,6 +132,7 @@ Independent on/off switches (not mutually exclusive with anything, each off by d
 | [!param](/DefectDynamics/DefectSpeciesAction/resolvable_radius) `> 0` | Adds a number-density/average-radius postprocessor pair counting only clusters at or above this radius | per species |
 | [!param](/DefectDynamics/DefectDynamicsAction/recombination_radius) `> 0` | Adds the two symmetric point-defect recombination kernels (requires both species) | shared |
 | [!param](/DefectDynamics/DefectDynamicsAction/opposite_absorption) `= false` | Turns off opposite-species absorption, independently of recombination (requires both species) | shared |
+| [!param](/DefectDynamics/DefectSpeciesAction/cascade_f2)/[!param](/DefectDynamics/DefectSpeciesAction/cascade_f3)/[!param](/DefectDynamics/DefectSpeciesAction/cascade_f4), sum `> 0` | Seeds that species' cluster sizes 2-4 directly from the cascade, reducing its own monomer generation term correspondingly | per species |
 
 "Per species" means the choice is made separately for `[vacancy]` and `[interstitial]` -- one
 species can use `Ef`/`Eb2` while the other uses `capillary_coefficient_eV`/
@@ -140,7 +167,9 @@ species' kernel to self-reaction-only behavior, with no opposite-species or reco
 at all -- the same self-reaction-only mode the low-level kernels already support when
 `opposite_coupled_var` is left unset. Leaving a species'
 [!param](/DefectDynamics/DefectSpeciesAction/resolvable_radius) at its default of zero omits
-that species' number-density/average-radius postprocessor pair.
+that species' number-density/average-radius postprocessor pair. Leaving a species' own
+`cascade_f2`/`cascade_f3`/`cascade_f4` at their default of zero (or setting them back to zero)
+is what turns off cascade seeding for that species.
 
 ## Example Input Syntax
 
@@ -154,4 +183,5 @@ that species' number-density/average-radius postprocessor pair.
 - [GenericInterstitialLoopGroupedNodalKernel.md]
 - [PointDefectRecombinationNodalKernel.md]
 - [GenericDislocationRecoveryNodalKernel.md]
+- [GenericCascadeSpectrumNodalKernel.md]
 - [theory/defect_dynamics.md]
