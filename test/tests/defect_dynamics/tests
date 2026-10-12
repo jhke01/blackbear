@@ -121,6 +121,13 @@
     design = 'DefectDynamicsAction.md'
     requirement = 'BlackBear shall error when a [DefectDynamics] species sub-block has cascade seeding active but [Grid] own explicit_max is below 4, since cluster sizes 2-4 would not all have explicit array components to seed.'
   []
+  [defect_dynamics_recovery_and_cascade_action]
+    type = CSVDiff
+    input = defect_dynamics_recovery_and_cascade_action.i
+    csvdiff = 'defect_dynamics_recovery_and_cascade_action_out.csv'
+    design = 'DefectDynamicsAction.md GenericDislocationRecoveryNodalKernel.md GenericCascadeSpectrumNodalKernel.md'
+    requirement = 'BlackBear shall build a two-species grouped cluster-dynamics problem from a [DefectDynamics] block with both a [Recovery] sub-block and per-species cascade_f2/cascade_f3/cascade_f4 active together, composing the time-evolving dislocation sink and the cascade-seeded generation split without interaction, since the two modify different terms (sink vs. generation) of the monomer-row equation.'
+  []
   [defect_dynamics_opposite_absorption_small]
     type = CSVDiff
     input = defect_dynamics_opposite_absorption_small.i
