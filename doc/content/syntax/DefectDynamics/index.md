@@ -38,6 +38,11 @@ symmetrically, only when
 [!param](/DefectDynamics/DefectDynamicsAction/recombination_radius) is given. The two are
 independent switches: either can be on without the other.
 
+The two species sub-blocks' `geometry` need not differ: `geometry = loop` for both is supported
+(e.g. modeling a vacancy species as a loop instead of a void, following Pokor et al. 2004's own
+Eqs 4a-4f, which use the same two-dimensional dislocation-bias absorption form for both species --
+see [theory/defect_dynamics.md]). `geometry = void` for both species is not supported.
+
 The block also derives several quantities that would otherwise have to be computed outside MOOSE
 and typed in by hand:
 

@@ -284,4 +284,19 @@
     design = 'DefectDynamicsAction.md'
     requirement = 'BlackBear shall add symmetric point-defect recombination kernels to a two-species [DefectDynamics] block when recombination_radius is given, deriving the recombination rate from the two species diffusivities instead of requiring it to be typed directly.'
   []
+  [defect_dynamics_two_loop_species_action]
+    type = CSVDiff
+    input = defect_dynamics_two_loop_species_action.i
+    csvdiff = 'defect_dynamics_two_loop_species_action_out.csv'
+    design = 'DefectDynamicsAction.md DefectSpeciesAction.md GenericInterstitialLoopGroupedNodalKernel.md'
+    requirement = 'BlackBear shall build a two-species grouped cluster-dynamics problem from a [DefectDynamics] block in which BOTH species use geometry = loop (e.g. a vacancy species modeled as a loop, following Pokor et al. 2004 Eqs 4a-4f, which treat vacancy and interstitial clusters identically), including opposite-species absorption and point-defect recombination between the two loop species, deriving every opposite-species kernel parameter from the other species own block exactly as it already does for one void and one loop species.'
+  []
+  [defect_dynamics_two_void_species_error]
+    type = RunException
+    input = defect_dynamics_different_cluster_sizes_action.i
+    cli_args = "DefectDynamics/interstitial/geometry=void"
+    expect_err = 'supports at most one void species; found two void species'
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall error when a [DefectDynamics] block is given two geometry = void species, since this codebase does not model a validated two-void-species coupling, unlike two geometry = loop species which is supported.'
+  []
 []

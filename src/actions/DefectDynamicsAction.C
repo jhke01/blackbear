@@ -130,7 +130,7 @@ DefectDynamicsAction::species() const
               "[interstitial]).");
   if (sp.size() > 2)
     mooseError("[DefectDynamics] found ", sp.size(), " species sub-blocks; at most two "
-              "(one void, one loop) are supported.");
+              "are supported.");
   return sp;
 }
 
@@ -309,21 +309,32 @@ DefectDynamicsAction::actAddNodalKernels()
   const bool enforce_nonnegative = grid_action->getParam<bool>("enforce_nonnegative");
   const Real tolerance_factor = grid_action->getParam<Real>("tolerance_factor");
 
-  const DefectSpeciesAction * voidSp = nullptr;
-  const DefectSpeciesAction * loopSp = nullptr;
+  // Exactly one void species is still required when two species are present: Pokor's own
+  // dislocation-bias absorption model (Eqs 4a-4f) treats BOTH clusters identically (same loop
+  // form), so two loop species already has a well-defined, validated meaning (vacancy modeled as
+  // a loop, matching Pokor et al. 2004's own equations -- see
+  // sa304_osiris_vacancy_as_loop.i and defect_dynamics_generalization_plan.md Section 9.9/4a).
+  // Two VOID species has no such precedent or physical motivation under this codebase's models
+  // (finite-sink-strength absorption, Eqs 2a-2f, is specifically a 3-D vacancy-void law) and
+  // remains rejected.
+  unsigned int void_count = 0;
   for (const auto * sp : sp_list)
-  {
     if (sp->getParam<MooseEnum>("geometry") == "void")
-      voidSp = sp;
-    else
-      loopSp = sp;
-  }
-  if (voidSp && sp_list.size() == 2 && !loopSp)
-    mooseError("[DefectDynamics] supports at most one void and one loop species; found two void "
-              "species.");
-  if (loopSp && sp_list.size() == 2 && !voidSp)
-    mooseError("[DefectDynamics] supports at most one void and one loop species; found two loop "
-              "species.");
+      ++void_count;
+  if (sp_list.size() == 2 && void_count == 2)
+    mooseError("[DefectDynamics] supports at most one void species; found two void species. Two "
+              "loop species (e.g. vacancy modeled as a loop, following Pokor et al. 2004's own "
+              "equations) are supported; two void species are not.");
+
+  // "The other species" -- used throughout below for opposite-species coupling and
+  // recombination. Only ever called when exactly two species are present.
+  auto other = [&](const DefectSpeciesAction & sp) -> const DefectSpeciesAction *
+  {
+    for (const auto * candidate : sp_list)
+      if (candidate != &sp)
+        return candidate;
+    return nullptr;
+  };
 
   // Both species present is necessary but not sufficient for either coupling term: opposite-
   // species absorption is gated on opposite_absorption (on by default, matching every validated
@@ -332,7 +343,7 @@ DefectDynamicsAction::actAddNodalKernels()
   // one without the other (e.g. to isolate one physical effect at a time, as
   // defect_dynamics_opposite_absorption_small.i does for recombination, or to turn off
   // absorption while keeping recombination).
-  const bool coupled = voidSp && loopSp;
+  const bool coupled = sp_list.size() == 2;
   const bool opposite_absorption_active = coupled && getParam<bool>("opposite_absorption");
   const bool recombination_active = coupled && getParam<Real>("recombination_radius") > 0.0;
 
@@ -347,7 +358,7 @@ DefectDynamicsAction::actAddNodalKernels()
   Real recombination_rate = 0.0;
   if (recombination_active)
     recombination_rate = 4.0 * libMesh::pi * getParam<Real>("recombination_radius") *
-                        (diffusivity(*voidSp) + diffusivity(*loopSp)) / atomic_volume;
+                        (diffusivity(*sp_list[0]) + diffusivity(*sp_list[1])) / atomic_volume;
 
   for (const auto * sp : sp_list)
   {
@@ -362,7 +373,7 @@ DefectDynamicsAction::actAddNodalKernels()
 
     const bool is_void = sp->getParam<MooseEnum>("geometry") == "void";
     const DefectSpeciesAction * opposite =
-        opposite_absorption_active ? (is_void ? loopSp : voidSp) : nullptr;
+        opposite_absorption_active ? other(*sp) : nullptr;
 
     // Two mutually exclusive ways to get the capillary law's A/C: derived from a monomer
     // formation energy and a dimer binding energy (the default, physically-intuitive path, used
@@ -512,12 +523,12 @@ DefectDynamicsAction::actAddNodalKernels()
 
   if (recombination_active)
   {
-    for (const auto * sp : {voidSp, loopSp})
+    for (const auto * sp : sp_list)
     {
-      const auto * other = sp == voidSp ? loopSp : voidSp;
+      const auto * opp = other(*sp);
       InputParameters params = _factory.getValidParams("PointDefectRecombinationNodalKernel");
       params.set<NonlinearVariableName>("variable") = variableName(*sp);
-      params.set<std::vector<VariableName>>("coupled_var") = {variableName(*other)};
+      params.set<std::vector<VariableName>>("coupled_var") = {variableName(*opp)};
       params.set<Real>("recombination_rate") = recombination_rate;
       _problem->addNodalKernel(
           "PointDefectRecombinationNodalKernel", sp->name() + "_recombination", params);
