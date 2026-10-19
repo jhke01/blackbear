@@ -158,6 +158,14 @@ DefectSpeciesAction::validParams()
       "(e.g. TEM). Left at zero (the default), no such postprocessors are added for this "
       "species.");
 
+  params.addParam<bool>(
+      "output_size_distribution",
+      false,
+      "If true, adds a ClusterSizeDistributionGrouped vector postprocessor for this species, "
+      "reporting its full per-size concentration (and radius) distribution at the enclosing "
+      "DefectDynamics block's size_distribution_times. Left false (the default), no such output "
+      "is added for this species.");
+
   params.addParam<Real>(
       "cascade_f2",
       0.0,

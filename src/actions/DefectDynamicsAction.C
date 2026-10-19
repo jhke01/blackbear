@@ -34,6 +34,8 @@ registerMooseAction("BlackBearApp", DefectDynamicsAction, "add_function");
 registerMooseAction("BlackBearApp", DefectDynamicsAction, "add_ic");
 registerMooseAction("BlackBearApp", DefectDynamicsAction, "add_nodal_kernel");
 registerMooseAction("BlackBearApp", DefectDynamicsAction, "add_postprocessor");
+registerMooseAction("BlackBearApp", DefectDynamicsAction, "add_output");
+registerMooseAction("BlackBearApp", DefectDynamicsAction, "add_vector_postprocessor");
 
 InputParameters
 DefectDynamicsAction::validParams()
@@ -87,6 +89,14 @@ DefectDynamicsAction::validParams()
       "Defaults to on, matching every validated production input; set to false to isolate "
       "recombination (via recombination_radius) from opposite-species absorption, or to run "
       "two species with no coupling between them at all.");
+
+  params.addParam<std::vector<Real>>(
+      "size_distribution_times",
+      std::vector<Real>(),
+      "Simulation times [s] (NOT dose/dpa) at which to write the full per-size cluster "
+      "concentration distribution for every species with output_size_distribution = true. "
+      "Shared by every species so they stay directly comparable at the same instants. Required "
+      "(and must be non-empty) if any species sets output_size_distribution = true.");
 
   return params;
 }
@@ -179,6 +189,28 @@ DefectDynamicsAction::functionName(const DefectSpeciesAction & sp)
   return sp.name() + "_index_fn";
 }
 
+bool
+DefectDynamicsAction::anySpeciesWantsSizeDistribution() const
+{
+  bool any = false;
+  for (const auto * sp : species())
+    if (sp->getParam<bool>("output_size_distribution"))
+      any = true;
+
+  if (any && getParam<std::vector<Real>>("size_distribution_times").empty())
+    mooseError("[DefectDynamics] has a species with output_size_distribution = true but "
+               "size_distribution_times is empty; set size_distribution_times to the simulation "
+               "times [s] at which to write the size distribution.");
+
+  return any;
+}
+
+std::string
+DefectDynamicsAction::sizeDistributionOutputName() const
+{
+  return name() + "_size_distribution_csv";
+}
+
 void
 DefectDynamicsAction::act()
 {
@@ -192,6 +224,10 @@ DefectDynamicsAction::act()
     actAddNodalKernels();
   else if (_current_task == "add_postprocessor")
     actAddPostprocessors();
+  else if (_current_task == "add_output")
+    actAddOutputs();
+  else if (_current_task == "add_vector_postprocessor")
+    actAddVectorPostprocessors();
 }
 
 void
@@ -536,19 +572,32 @@ DefectDynamicsAction::actAddNodalKernels()
   }
 }
 
+namespace
+{
+/// Copies the grid shape and nonnegative-reconstruction parameters shared by every grouped
+/// postprocessor/vector postprocessor onto params, so each caller only needs to set the
+/// object-specific parameters (clusters, num_cluster_sizes, n_minimum/n_size, r1, etc.).
+void
+setGroupingLayoutParams(InputParameters & params, const DefectDynamicsGridAction & grid_action)
+{
+  params.set<unsigned int>("explicit_max") = grid_action.getParam<unsigned int>("explicit_max");
+  params.set<MooseEnum>("group_spacing") = grid_action.getParam<MooseEnum>("spacing");
+  params.set<unsigned int>("group_linear_width") =
+      grid_action.getParam<unsigned int>("linear_width");
+  params.set<Real>("group_geometric_ratio") = grid_action.getParam<Real>("geometric_ratio");
+  params.set<bool>("enforce_group_nonnegative") =
+      grid_action.getParam<bool>("enforce_nonnegative");
+  params.set<Real>("group_nonnegative_tolerance_factor") =
+      grid_action.getParam<Real>("tolerance_factor");
+}
+} // namespace
+
 void
 DefectDynamicsAction::actAddPostprocessors()
 {
   const auto grid_action = grid();
   const Real atomic_volume = getParam<Real>("atomic_volume");
   const Real lattice_parameter = getParam<Real>("lattice_parameter");
-
-  const unsigned int explicit_max = grid_action->getParam<unsigned int>("explicit_max");
-  const auto group_spacing = grid_action->getParam<MooseEnum>("spacing");
-  const unsigned int group_linear_width = grid_action->getParam<unsigned int>("linear_width");
-  const Real group_geometric_ratio = grid_action->getParam<Real>("geometric_ratio");
-  const bool enforce_nonnegative = grid_action->getParam<bool>("enforce_nonnegative");
-  const Real tolerance_factor = grid_action->getParam<Real>("tolerance_factor");
 
   for (const auto * sp : species())
   {
@@ -561,12 +610,7 @@ DefectDynamicsAction::actAddPostprocessors()
       params.set<std::vector<VariableName>>("clusters") = {var_name};
       params.set<unsigned int>("n_size") = 1;
       params.set<unsigned int>("num_cluster_sizes") = num_cluster_sizes;
-      params.set<unsigned int>("explicit_max") = explicit_max;
-      params.set<MooseEnum>("group_spacing") = group_spacing;
-      params.set<unsigned int>("group_linear_width") = group_linear_width;
-      params.set<Real>("group_geometric_ratio") = group_geometric_ratio;
-      params.set<bool>("enforce_group_nonnegative") = enforce_nonnegative;
-      params.set<Real>("group_nonnegative_tolerance_factor") = tolerance_factor;
+      setGroupingLayoutParams(params, *grid_action);
       _problem->addPostprocessor(
           "ClusterSizeConcentrationGrouped", sp->name() + "_monomer_concentration", params);
     }
@@ -586,12 +630,7 @@ DefectDynamicsAction::actAddPostprocessors()
       params.set<unsigned int>("n_minimum") = n_minimum;
       params.set<Real>("atomic_volume") = atomic_volume;
       params.set<unsigned int>("num_cluster_sizes") = num_cluster_sizes;
-      params.set<unsigned int>("explicit_max") = explicit_max;
-      params.set<MooseEnum>("group_spacing") = group_spacing;
-      params.set<unsigned int>("group_linear_width") = group_linear_width;
-      params.set<Real>("group_geometric_ratio") = group_geometric_ratio;
-      params.set<bool>("enforce_group_nonnegative") = enforce_nonnegative;
-      params.set<Real>("group_nonnegative_tolerance_factor") = tolerance_factor;
+      setGroupingLayoutParams(params, *grid_action);
       _problem->addPostprocessor(
           "ClusterTotalDensityGrouped", sp->name() + "_resolvable_density", params);
     }
@@ -602,14 +641,64 @@ DefectDynamicsAction::actAddPostprocessors()
       params.set<Real>("radius_exponent") = radius_exponent;
       params.set<unsigned int>("n_minimum") = n_minimum;
       params.set<unsigned int>("num_cluster_sizes") = num_cluster_sizes;
-      params.set<unsigned int>("explicit_max") = explicit_max;
-      params.set<MooseEnum>("group_spacing") = group_spacing;
-      params.set<unsigned int>("group_linear_width") = group_linear_width;
-      params.set<Real>("group_geometric_ratio") = group_geometric_ratio;
-      params.set<bool>("enforce_group_nonnegative") = enforce_nonnegative;
-      params.set<Real>("group_nonnegative_tolerance_factor") = tolerance_factor;
+      setGroupingLayoutParams(params, *grid_action);
       _problem->addPostprocessor(
           "ClusterAverageRadiusGrouped", sp->name() + "_resolvable_avg_radius", params);
     }
+  }
+}
+
+void
+DefectDynamicsAction::actAddOutputs()
+{
+  if (!anySpeciesWantsSizeDistribution())
+    return;
+
+  InputParameters params = _factory.getValidParams("CSV");
+  params.set<std::vector<Real>>("sync_times") = getParam<std::vector<Real>>("size_distribution_times");
+  params.set<bool>("sync_only") = true;
+  // Without this, this output falls back to the common [Outputs] block's file_base and collides
+  // with the main CSV output (both would try to write <file_base>.csv).
+  params.set<bool>("append_object_name") = true;
+  // Restrict this dedicated output to vector postprocessors only, so it doesn't ALSO duplicate
+  // the regular scalar postprocessor time history the main [Outputs] csv = true block already
+  // writes every timestep.
+  params.set<ExecFlagEnum>("execute_postprocessors_on") = EXEC_NONE;
+  params.set<ExecFlagEnum>("execute_scalars_on") = EXEC_NONE;
+  _problem->addOutput("CSV", sizeDistributionOutputName(), params);
+}
+
+void
+DefectDynamicsAction::actAddVectorPostprocessors()
+{
+  if (!anySpeciesWantsSizeDistribution())
+    return;
+
+  const auto grid_action = grid();
+  const Real atomic_volume = getParam<Real>("atomic_volume");
+  const Real lattice_parameter = getParam<Real>("lattice_parameter");
+  const std::string output_name = sizeDistributionOutputName();
+
+  for (const auto * sp : species())
+  {
+    if (!sp->getParam<bool>("output_size_distribution"))
+      continue;
+
+    const std::string var_name = variableName(*sp);
+    const unsigned int num_cluster_sizes =
+        sp->resolvedNumClusterSizes(atomic_volume, lattice_parameter);
+
+    Real r1, radius_exponent;
+    sp->monomerRadiusLaw(atomic_volume, lattice_parameter, r1, radius_exponent);
+
+    InputParameters params = _factory.getValidParams("ClusterSizeDistributionGrouped");
+    params.set<std::vector<VariableName>>("clusters") = {var_name};
+    params.set<unsigned int>("num_cluster_sizes") = num_cluster_sizes;
+    params.set<Real>("r1") = r1;
+    params.set<Real>("radius_exponent") = radius_exponent;
+    setGroupingLayoutParams(params, *grid_action);
+    params.set<std::vector<OutputName>>("outputs") = {output_name};
+    _problem->addVectorPostprocessor(
+        "ClusterSizeDistributionGrouped", sp->name() + "_size_distribution", params);
   }
 }

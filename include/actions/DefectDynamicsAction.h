@@ -83,10 +83,20 @@ protected:
   void actAddICs();
   void actAddNodalKernels();
   void actAddPostprocessors();
+  void actAddOutputs();
+  void actAddVectorPostprocessors();
 
   /// Builds the array variable name for a species block, e.g. "vacancy_clusters" for a block
   /// named "vacancy". Shared across actAddVariables/actAddFunctions/actAddICs/actAddNodalKernels/
   /// actAddPostprocessors so every object referencing a species agrees on its variable's name.
   static std::string variableName(const DefectSpeciesAction & sp);
   static std::string functionName(const DefectSpeciesAction & sp);
+
+  /// Whether any species sub-block set output_size_distribution = true. Errors if so and
+  /// size_distribution_times is empty (there would be nothing to sync the output to).
+  bool anySpeciesWantsSizeDistribution() const;
+  /// Name of the dedicated, sync_times-only CSV output that carries every species'
+  /// ClusterSizeDistributionGrouped vector postprocessor, kept separate from the general
+  /// [Outputs] block so the regular per-timestep scalar postprocessor history is unaffected.
+  std::string sizeDistributionOutputName() const;
 };

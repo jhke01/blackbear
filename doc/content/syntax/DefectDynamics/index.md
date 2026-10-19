@@ -157,6 +157,40 @@ the underlying kernel's own parameters of the same name. See
 law and a direct DFT/MD-sourced binding- or formation-energy table for small cluster sizes, with
 an automatic fallback to the capillary law beyond the table's range.
 
+## Full Cluster Size Distribution
+
+By default, only aggregate scalars are available per species
+([!param](/DefectDynamics/DefectSpeciesAction/resolvable_radius)'s postprocessor pair, and the
+always-added monomer concentration). A species additionally sets
+[!param](/DefectDynamics/DefectSpeciesAction/output_size_distribution) `= true` to get its full
+per-size concentration (and radius) distribution -- one row per physical cluster size $n$ from 1
+to that species' own `num_cluster_sizes`, reconstructed via [ClusterSizeDistributionGrouped.md]
+the same way the grouped kernels reconstruct a cluster size's own concentration internally:
+
+```
+[DefectDynamics]
+  ...
+  size_distribution_times = '1.7e7 3.4e7'   # simulation times [s], NOT dose/dpa, shared by every species
+
+  [vacancy]
+    ...
+    output_size_distribution = true
+  []
+[]
+```
+
+[!param](/DefectDynamics/DefectDynamicsAction/size_distribution_times) is shared by every
+species (not per-species) so that species with this output turned on stay directly comparable at
+the same instants, and must be non-empty if any species turns the output on. The block adds a
+dedicated `CSV` output, restricted to exactly these times (`sync_times`/`sync_only`) and to
+vector postprocessors only, so the regular per-timestep scalar postprocessor history from the
+general `[Outputs]` block is completely unaffected; MOOSE's own naming convention produces one
+file per species per requested time, e.g.
+`<file_base>_<DefectDynamics-block-name>_size_distribution_csv_vacancy_size_distribution_0002.csv`
+for the second sync time. Within a grouped (large-$n$) bin, the reconstructed values lie on that
+bin's own linear fit (its stored $L_0$/$L_1$ moments), so they are not independent data -- see
+[ClusterSizeDistributionGrouped.md] for the reconstruction formula.
+
 ## Disabling or Omitting a Term
 
 Setting `dislocation_density = 0` turns off the dislocation sink for every species (unless
@@ -189,4 +223,5 @@ is what turns off cascade seeding for that species.
 - [PointDefectRecombinationNodalKernel.md]
 - [GenericDislocationRecoveryNodalKernel.md]
 - [GenericCascadeSpectrumNodalKernel.md]
+- [ClusterSizeDistributionGrouped.md]
 - [theory/defect_dynamics.md]

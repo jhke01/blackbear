@@ -299,4 +299,19 @@
     design = 'DefectDynamicsAction.md'
     requirement = 'BlackBear shall error when a [DefectDynamics] block is given two geometry = void species, since this codebase does not model a validated two-void-species coupling, unlike two geometry = loop species which is supported.'
   []
+  [defect_dynamics_size_distribution_action]
+    type = CSVDiff
+    input = defect_dynamics_size_distribution_action.i
+    csvdiff = 'defect_dynamics_size_distribution_action_out.csv defect_dynamics_size_distribution_action_DefectDynamics_size_distribution_csv_vacancy_size_distribution_0002.csv'
+    design = 'DefectDynamicsAction.md DefectSpeciesAction.md ClusterSizeDistributionGrouped.md'
+    requirement = 'BlackBear shall write the full per-size cluster concentration distribution for a species with output_size_distribution = true, at the times given in size_distribution_times, through a dedicated sync_times-only CSV output that leaves the regular per-timestep scalar postprocessor history, and any species without output_size_distribution = true, unaffected.'
+  []
+  [defect_dynamics_size_distribution_requires_times_error]
+    type = RunException
+    input = defect_dynamics_size_distribution_action.i
+    cli_args = "DefectDynamics/size_distribution_times=''"
+    expect_err = 'size_distribution_times is empty'
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall error when a [DefectDynamics] block has a species with output_size_distribution = true but size_distribution_times is empty, since there would be no time to sync the output to.'
+  []
 []
