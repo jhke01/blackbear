@@ -377,7 +377,11 @@ Real
 GenericClusterDynamicsGroupedNodalKernelTempl<is_ad>::beta(unsigned int n) const
 {
   if (n < _beta_cache.size())
-    return _beta_cache[n];
+    // In interfacial_energy mode, _beta_cache holds beta(n)/monomerDiffusivity() (see
+    // ensureCoefficientCache()): a pure function of n that never changes, so the live, possibly
+    // solution-dependent diffusivity is applied here as a cheap O(1) multiply rather than baked
+    // into an O(_num_cluster_sizes) cache rebuild on every call.
+    return _rate_model == RateModel::SIMPLE ? _beta_cache[n] : _beta_cache[n] * monomerDiffusivity();
 
   if (_rate_model == RateModel::SIMPLE)
     return _beta0 * std::cbrt(static_cast<Real>(n));
@@ -390,7 +394,9 @@ Real
 GenericClusterDynamicsGroupedNodalKernelTempl<is_ad>::alpha(unsigned int n) const
 {
   if (n < _alpha_cache.size())
-    return _alpha_cache[n];
+    // Same shape-cache convention as beta() above: _alpha_cache[n] = alpha(n)/monomerDiffusivity()
+    // in interfacial_energy mode.
+    return _rate_model == RateModel::SIMPLE ? _alpha_cache[n] : _alpha_cache[n] * monomerDiffusivity();
 
   if (_rate_model == RateModel::SIMPLE)
     return _alpha0 * std::cbrt(static_cast<Real>(n));
@@ -518,10 +524,15 @@ template <bool is_ad>
 void
 GenericClusterDynamicsGroupedNodalKernelTempl<is_ad>::ensureCoefficientCache() const
 {
-  // When coupled to a live vacancy concentration, monomerDiffusivity() -- and therefore every
-  // beta/alpha value below -- is solution-dependent, not just _num_cluster_sizes-dependent, so
-  // the cache must be rebuilt on every call rather than only when _num_cluster_sizes changes.
-  if (_cache_size == _num_cluster_sizes && !_vacancy_coupling_active)
+  // In interfacial_energy mode, beta(n) = shape(n) * monomerDiffusivity() and
+  // alpha(n) = shape(n-1) * monomerDiffusivity() * exp(-Eb(n)/kT): the diffusivity factors out of
+  // every cached value as one common multiplier. _beta_cache/_alpha_cache below therefore store
+  // beta(n)/monomerDiffusivity() and alpha(n)/monomerDiffusivity() (that pure, n-only shape, never
+  // the live diffusivity itself), so this cache depends only on _num_cluster_sizes and is rebuilt
+  // exactly as rarely as before vacancy_coupled_var existed -- beta()/alpha() apply the current,
+  // possibly solution-dependent monomerDiffusivity() as a cheap O(1) multiply at query time
+  // instead.
+  if (_cache_size == _num_cluster_sizes)
     return;
 
   _beta_cache.assign(_num_cluster_sizes + 1, 0.0);
@@ -539,7 +550,6 @@ GenericClusterDynamicsGroupedNodalKernelTempl<is_ad>::ensureCoefficientCache() c
   }
   else
   {
-    const Real diffusivity = monomerDiffusivity();
     const Real atomic_volume = atomicVolume();
     const Real inv_atomic_volume = 1.0 / atomic_volume;
     const Real radius_prefactor = std::cbrt(3.0 * atomic_volume / (4.0 * libMesh::pi));
@@ -550,7 +560,7 @@ GenericClusterDynamicsGroupedNodalKernelTempl<is_ad>::ensureCoefficientCache() c
     for (unsigned int n = 1; n <= _num_cluster_sizes; ++n)
     {
       radius_cache[n] = radius_prefactor * std::cbrt(static_cast<Real>(n));
-      _beta_cache[n] = 4.0 * libMesh::pi * (r1 + radius_cache[n]) * diffusivity * inv_atomic_volume;
+      _beta_cache[n] = 4.0 * libMesh::pi * (r1 + radius_cache[n]) * inv_atomic_volume;
     }
 
     for (unsigned int n = 2; n <= _num_cluster_sizes; ++n)
