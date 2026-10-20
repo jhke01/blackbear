@@ -53,6 +53,21 @@ public:
 
   virtual void act() override;
 
+  /// Resolves a species' capillary A, C, and monomer formation energy (E_f(1) = A + C) from
+  /// whichever of the two mutually exclusive input pairs it set: {Ef, Eb2} (derived via
+  /// capillaryCoefficients) or {capillary_coefficient_eV, capillary_constant_eV} (used directly).
+  /// Public so a sibling action (e.g. SoluteClusterDynamicsAction) can resolve a [DefectDynamics]
+  /// species' formation energy without duplicating this logic.
+  static void resolveCapillaryCoefficients(
+      const DefectSpeciesAction & sp, Real & A, Real & C, Real & formation_energy_eV);
+
+  /// Builds the array variable name for a species block, e.g. "vacancy_clusters" for a block
+  /// named "vacancy". Public so a sibling action can couple to a [DefectDynamics] species'
+  /// variable by name without duplicating this one-line formatter. Shared across
+  /// actAddVariables/actAddFunctions/actAddICs/actAddNodalKernels/actAddPostprocessors so every
+  /// object referencing a species agrees on its variable's name.
+  static std::string variableName(const DefectSpeciesAction & sp);
+
 protected:
   /// This block's [Grid] sub-block, or nullptr if none was given (an error, checked in act()).
   const DefectDynamicsGridAction * grid() const;
@@ -72,12 +87,6 @@ protected:
   /// (Ef, Eb2, exponent): A = (Ef - Eb2)/(2^exponent - 1), C = Ef - A.
   static void capillaryCoefficients(Real Ef_eV, Real Eb2_eV, Real exponent, Real & A, Real & C);
 
-  /// Resolves a species' capillary A, C, and monomer formation energy (E_f(1) = A + C) from
-  /// whichever of the two mutually exclusive input pairs it set: {Ef, Eb2} (derived via
-  /// capillaryCoefficients) or {capillary_coefficient_eV, capillary_constant_eV} (used directly).
-  static void resolveCapillaryCoefficients(
-      const DefectSpeciesAction & sp, Real & A, Real & C, Real & formation_energy_eV);
-
   void actAddVariables();
   void actAddFunctions();
   void actAddICs();
@@ -86,10 +95,6 @@ protected:
   void actAddOutputs();
   void actAddVectorPostprocessors();
 
-  /// Builds the array variable name for a species block, e.g. "vacancy_clusters" for a block
-  /// named "vacancy". Shared across actAddVariables/actAddFunctions/actAddICs/actAddNodalKernels/
-  /// actAddPostprocessors so every object referencing a species agrees on its variable's name.
-  static std::string variableName(const DefectSpeciesAction & sp);
   static std::string functionName(const DefectSpeciesAction & sp);
 
   /// Whether any species sub-block set output_size_distribution = true. Errors if so and

@@ -230,4 +230,52 @@
     csvdiff = 'cluster_dynamics_energy_formation_table_out.csv'
     requirement = 'BlackBear shall derive detailed-balance emission rates from tabulated formation energies.'
   []
+  [cluster_dynamics_vacancy_coupling]
+    type = CSVDiff
+    input = cluster_dynamics_vacancy_coupling.i
+    csvdiff = 'cluster_dynamics_vacancy_coupling_out.csv'
+    design = 'GenericClusterDynamicsNodalKernel.md'
+    requirement = 'BlackBear shall reproduce the uncoupled ClusterDynamicsNodalKernel solution when vacancy_coupled_var is given but the coupled vacancy monomer concentration is pinned at its thermal-equilibrium value, since the dynamic supersaturation ratio is then 1 and the coupling is a no-op.'
+  []
+  [cluster_dynamics_jacobian_vacancy_coupling]
+    type = PetscJacobianTester
+    input = cluster_dynamics_jacobian_vacancy_coupling.i
+    run_sim = True
+    ratio_tol = 1e-8
+    design = 'GenericClusterDynamicsNodalKernel.md'
+    requirement = 'BlackBear shall provide an analytical off-diagonal Jacobian for the ClusterDynamicsNodalKernel that captures the coupling of the monomer diffusivity to a DefectDynamics vacancy monomer concentration through vacancy_coupled_var.'
+  []
+  [cluster_dynamics_grouped_vacancy_coupling]
+    type = CSVDiff
+    input = cluster_dynamics_grouped_vacancy_coupling.i
+    csvdiff = 'cluster_dynamics_grouped_vacancy_coupling_out.csv'
+    design = 'GenericClusterDynamicsGroupedNodalKernel.md'
+    requirement = 'BlackBear shall reproduce the uncoupled ClusterDynamicsGroupedNodalKernel solution when vacancy_coupled_var is given but the coupled vacancy monomer concentration is pinned at its thermal-equilibrium value, since the dynamic supersaturation ratio is then 1 and the coupling is a no-op.'
+  []
+  [cluster_dynamics_jacobian_grouped_vacancy_coupling]
+    type = PetscJacobianTester
+    input = cluster_dynamics_jacobian_grouped_vacancy_coupling.i
+    run_sim = True
+    ratio_tol = 1e-8
+    design = 'GenericClusterDynamicsGroupedNodalKernel.md'
+    requirement = 'BlackBear shall provide an analytical off-diagonal Jacobian for the ClusterDynamicsGroupedNodalKernel that captures the coupling of the monomer diffusivity to a DefectDynamics vacancy monomer concentration through vacancy_coupled_var.'
+  []
+  [cluster_dynamics_vacancy_coupling_double_counting_warning]
+    type = RunException
+    input = cluster_dynamics_vacancy_coupling.i
+    cli_args = 'NodalKernels/clusters_dyn/radiation_enhanced_factor=2.0'
+    expect_err = 'radiation_enhanced_factor and vacancy_coupled_var both scale the same monomer diffusivity'
+    allow_warnings = false
+    design = 'GenericClusterDynamicsNodalKernel.md'
+    requirement = 'BlackBear shall warn when ClusterDynamicsNodalKernel has both vacancy_coupled_var active and radiation_enhanced_factor set to a value other than 1.0, since the two parameters scale the same monomer diffusivity and combining them double-counts the enhancement.'
+  []
+  [cluster_dynamics_grouped_vacancy_coupling_double_counting_warning]
+    type = RunException
+    input = cluster_dynamics_grouped_vacancy_coupling.i
+    cli_args = 'NodalKernels/clusters_dyn/radiation_enhanced_factor=2.0'
+    expect_err = 'radiation_enhanced_factor and vacancy_coupled_var both scale the same monomer diffusivity'
+    allow_warnings = false
+    design = 'GenericClusterDynamicsGroupedNodalKernel.md'
+    requirement = 'BlackBear shall warn when ClusterDynamicsGroupedNodalKernel has both vacancy_coupled_var active and radiation_enhanced_factor set to a value other than 1.0, since the two parameters scale the same monomer diffusivity and combining them double-counts the enhancement.'
+  []
 []

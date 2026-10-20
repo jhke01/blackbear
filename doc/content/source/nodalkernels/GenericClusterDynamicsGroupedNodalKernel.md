@@ -113,7 +113,16 @@ input examples are documented in [GenericClusterDynamicsNodalKernel.md].
 The
 [!param](/NodalKernels/ClusterDynamicsGroupedNodalKernel/radiation_enhanced_factor)
 parameter applies a fixed multiplicative factor to the monomer diffusivity.
-Evolution of point-defect concentrations is not part of this kernel.
+Evolution of point-defect concentrations is not part of this kernel; optionally,
+[!param](/NodalKernels/ClusterDynamicsGroupedNodalKernel/vacancy_coupled_var) couples the monomer
+diffusivity to a live vacancy monomer concentration evolved elsewhere (by
+[DefectDynamics/index.md]'s own `VacancyVoidGroupedNodalKernel`) -- see
+[SoluteClusterDynamics/index.md], which wires it automatically. This coupling is meant to
+REPLACE `radiation_enhanced_factor`, not combine with it: the static factor is typically
+calibrated to approximate the same enhancement the dynamic supersaturation ratio now computes
+directly, so leaving `radiation_enhanced_factor` at a value other than its default of 1.0 while
+`vacancy_coupled_var` is active double-counts the effect. The kernel issues a warning in that
+case.
 
 ## Disabling Grouping
 

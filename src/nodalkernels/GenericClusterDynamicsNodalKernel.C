@@ -33,6 +33,17 @@ convertEvVectorToJ(const std::vector<Real> & values)
     converted[i] = values[i] * eV;
   return converted;
 }
+
+// 4*exp(-E_f/kT), matching DefectDynamicsAction::monomerConcentration()'s identical formula and
+// physical constants exactly. Guarded against temperature == 0 (rate_model = simple, where this
+// value is never used) so the member initializer never divides by zero.
+Real
+vacancyThermalConcentration(Real formation_energy_eV, Real temperature)
+{
+  if (temperature <= 0.0)
+    return 0.0;
+  return 4.0 * std::exp(-formation_energy_eV * eV / (kB * temperature));
+}
 } // namespace
 
 registerMooseObject("BlackBearApp", ClusterDynamicsNodalKernel);
@@ -94,6 +105,20 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::validParams()
                         1.0,
                         "Multiplicative radiation-enhanced factor applied to the monomer "
                         "diffusivity for the interfacial-energy model.");
+  params.addCoupledVar(
+      "vacancy_coupled_var",
+      0.0,
+      "Optional DefectDynamics vacancy grouped array variable. When supplied, the monomer "
+      "diffusivity is additionally multiplied by the dynamic vacancy supersaturation ratio "
+      "C_v(1,t)/C_v_thermal, in place of (or on top of) radiation_enhanced_factor. "
+      "C_v_thermal is computed from vacancy_formation_energy_eV at this kernel's own "
+      "temperature.");
+  params.addParam<Real>(
+      "vacancy_formation_energy_eV",
+      0.0,
+      "Vacancy monomer formation energy E_f [eV], required when vacancy_coupled_var is given -- "
+      "used to compute C_v_thermal = 4*exp(-E_f/kT) at this kernel's own temperature, matching "
+      "DefectDynamicsAction::monomerConcentration()'s identical formula and physical constants.");
   params.addParam<Real>(
       "sigma",
       0.0,
@@ -158,6 +183,12 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::GenericClusterDynamicsNodalKernel
     _D0(this->template getParam<Real>("D0")),
     _Q(this->template getParam<Real>("Q_eV") * eV),
     _radiation_enhanced_factor(this->template getParam<Real>("radiation_enhanced_factor")),
+    _vacancy_array(this->coupledArrayValue("vacancy_coupled_var")),
+    _vacancy_coupling_active(this->isCoupled("vacancy_coupled_var")),
+    _vacancy_var_num(this->coupled("vacancy_coupled_var")),
+    _vacancy_c_thermal(
+        vacancyThermalConcentration(this->template getParam<Real>("vacancy_formation_energy_eV"),
+                                    this->template getParam<Real>("temperature"))),
     _sigma(this->template getParam<Real>("sigma")),
     _atomic_volume(this->template getParam<Real>("atomic_volume")),
     _Omega(this->template getParam<Real>("Omega_kB_K") * kB),
@@ -173,6 +204,28 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::GenericClusterDynamicsNodalKernel
     _formation_energy_table(
         convertEvVectorToJ(this->template getParam<std::vector<Real>>("formation_energy_table_eV")))
 {
+  if (_vacancy_coupling_active &&
+      this->template getParam<Real>("vacancy_formation_energy_eV") <= 0.0)
+    mooseError("ClusterDynamicsNodalKernel requires vacancy_formation_energy_eV > 0 when "
+              "vacancy_coupled_var is given.");
+
+  // radiation_enhanced_factor and vacancy_coupled_var both multiply the SAME monomer
+  // diffusivity: a nonzero vacancy supersaturation ratio (S_v = C_v(1,t)/C_v_thermal) is itself
+  // often many orders of magnitude under irradiation, so leaving radiation_enhanced_factor at a
+  // value calibrated to approximate that same enhancement statically (its usual role before this
+  // coupling existed) double-counts the effect rather than combining two independent physical
+  // mechanisms.
+  if (_vacancy_coupling_active && this->parameters().isParamSetByUser("radiation_enhanced_factor") &&
+      _radiation_enhanced_factor != 1.0)
+    this->paramWarning(
+        "radiation_enhanced_factor",
+        "radiation_enhanced_factor and vacancy_coupled_var both scale the same monomer "
+        "diffusivity; leaving radiation_enhanced_factor at a value other than 1.0 while "
+        "vacancy_coupled_var is active double-counts the enhancement instead of replacing a "
+        "static placeholder with the dynamic vacancy supersaturation ratio. Set "
+        "radiation_enhanced_factor = 1.0 (its default) unless the two are deliberately meant to "
+        "compound.");
+
   // Every array component is coupled to the monomer, so the Jacobian contains entries outside
   // the default diagonal-block sparsity pattern of the array variable.
   if (!this->_fe_problem.useHashTableMatrixAssembly())
@@ -307,15 +360,54 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::atomicVolume() const
 
 template <bool is_ad>
 Real
+GenericClusterDynamicsNodalKernelTempl<is_ad>::baseDiffusivity() const
+{
+  if (_diffusivity_model == DiffusivityModel::CONSTANT)
+    return _monomer_diffusivity;
+  return _D0 * std::exp(-_Q / (kB * _temperature));
+}
+
+template <bool is_ad>
+Real
 GenericClusterDynamicsNodalKernelTempl<is_ad>::monomerDiffusivity() const
 {
-  Real diffusivity = 0.0;
-  if (_diffusivity_model == DiffusivityModel::CONSTANT)
-    diffusivity = _monomer_diffusivity;
-  else
-    diffusivity = _D0 * std::exp(-_Q / (kB * _temperature));
+  Real diffusivity = _radiation_enhanced_factor * baseDiffusivity();
+  if (_vacancy_coupling_active)
+    diffusivity *= _vacancy_array[_qp](0) / _vacancy_c_thermal;
+  return diffusivity;
+}
 
-  return _radiation_enhanced_factor * diffusivity;
+template <bool is_ad>
+Real
+GenericClusterDynamicsNodalKernelTempl<is_ad>::monomerDiffusivityCouplingDerivative() const
+{
+  if (!_vacancy_coupling_active)
+    return 0.0;
+  return _radiation_enhanced_factor * baseDiffusivity() / _vacancy_c_thermal;
+}
+
+template <bool is_ad>
+Real
+GenericClusterDynamicsNodalKernelTempl<is_ad>::betaPrime(const unsigned int n) const
+{
+  if (!_vacancy_coupling_active || _rate_model == RateModel::SIMPLE)
+    return 0.0;
+  return 4.0 * libMesh::pi * (radius(1) + radius(n)) * monomerDiffusivityCouplingDerivative() /
+        atomicVolume();
+}
+
+template <bool is_ad>
+Real
+GenericClusterDynamicsNodalKernelTempl<is_ad>::alphaPrime(const unsigned int n) const
+{
+  if (!_vacancy_coupling_active || _rate_model == RateModel::SIMPLE)
+    return 0.0;
+  if (n <= 1)
+    mooseError("alphaPrime(n) is only defined for cluster sizes n >= 2 in interfacial_energy "
+              "mode.");
+  // alpha(n) = beta(n-1)*exp(-E_b(n)/kT); E_b(n) does not depend on the coupled vacancy
+  // concentration, so this is the same chain rule with beta replaced by betaPrime.
+  return betaPrime(n - 1) * std::exp(-bindingEnergy(n) / (kB * _temperature));
 }
 
 template <bool is_ad>
@@ -377,7 +469,10 @@ void
 GenericClusterDynamicsNodalKernelTempl<is_ad>::ensureCoefficientCache(
     const unsigned int n_comp) const
 {
-  if (_cache_size == n_comp)
+  // When coupled to a live vacancy concentration, monomerDiffusivity() -- and therefore every
+  // beta/alpha value below -- is solution-dependent, not just n_comp-dependent, so the cache
+  // must be rebuilt on every call rather than only when n_comp changes.
+  if (_cache_size == n_comp && !_vacancy_coupling_active)
     return;
 
   _beta_cache.assign(n_comp + 1, 0.0);
@@ -548,6 +643,67 @@ void
 GenericClusterDynamicsNodalKernelTempl<true>::computeQpJacobian()
 {
   mooseError("Internal error: computeQpJacobian should never be called for the AD version");
+}
+
+// Non-AD off-diagonal Jacobian against the coupled vacancy array's own monomer component
+// (component 0, see _vacancy_array's own class comment). Mirrors computeQpJacobian() exactly,
+// row by row, with beta/alpha replaced by their vacancy-coupling derivatives betaPrime/
+// alphaPrime -- every term here is the SAME intra-variable Jacobian contribution
+// computeQpJacobian() already derives, just differentiated with respect to the coupled vacancy
+// monomer instead of with respect to this kernel's own array components, and written to column
+// 0 of the coupled variable instead of to one of this kernel's own columns.
+template <>
+void
+GenericClusterDynamicsNodalKernelTempl<false>::computeQpOffDiagJacobian(const unsigned int jvar)
+{
+  if (!_vacancy_coupling_active || jvar != _vacancy_var_num)
+    return;
+
+  const auto n_comp = static_cast<unsigned int>(_u[_qp].size());
+  ensureCoefficientCache(n_comp);
+  const Real c1 = _u[_qp](0);
+
+  // Row 0: monomer. residual(0) = -generation + sink*c1 + absorption - emission (sink has no
+  // diffusivity dependence, so d(residual(0))/d(vacancy_c1) is exactly
+  // d(absorption)/d(vacancy_c1) - d(emission)/d(vacancy_c1), mirroring d F(0)/d c(0)/c(j)'s own
+  // sign convention in computeQpJacobian() above (no extra negative sign at the end there
+  // either).
+  {
+    Real d0 = n_comp > 1 ? 2.0 * betaPrime(1) * c1 * c1 : 0.0;
+    for (unsigned int j = 1; j < n_comp; ++j)
+    {
+      const unsigned int nj = j + 1;
+      if (j + 1 < n_comp)
+        d0 += betaPrime(nj) * c1 * _u[_qp](j);
+      d0 -= (j == 1 ? 2.0 : 1.0) * alphaPrime(nj) * _u[_qp](j);
+    }
+    setJacobian(0, 0, d0);
+  }
+
+  // Rows i >= 1: cluster of size n = i+1, mirroring F(i)'s own growth_in/growth_out/emit_in/
+  // emit_out terms above
+  for (unsigned int i = 1; i < n_comp; ++i)
+  {
+    const unsigned int n = i + 1;
+    const bool has_larger = i + 1 < n_comp;
+    const Real c_n = _u[_qp](i);
+    const Real c_nm1 = _u[_qp](i - 1);
+
+    const Real growth_in = betaPrime(n - 1) * c1 * c_nm1;
+    const Real growth_out = has_larger ? betaPrime(n) * c1 * c_n : 0.0;
+    const Real emit_in = has_larger ? alphaPrime(n + 1) * _u[_qp](i + 1) : 0.0;
+    const Real emit_out = alphaPrime(n) * c_n;
+
+    setJacobian(i, 0, -(growth_in - growth_out + emit_in - emit_out));
+  }
+}
+
+template <>
+void
+GenericClusterDynamicsNodalKernelTempl<true>::computeQpOffDiagJacobian(const unsigned int)
+{
+  mooseError(
+      "Internal error: computeQpOffDiagJacobian should never be called for the AD version");
 }
 
 template class GenericClusterDynamicsNodalKernelTempl<false>;

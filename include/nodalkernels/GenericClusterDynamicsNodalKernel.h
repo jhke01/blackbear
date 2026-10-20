@@ -65,6 +65,12 @@ public:
 protected:
   virtual void computeQpResidual(GenericRealEigenVector<is_ad> & residual) override;
   virtual void computeQpJacobian() override;
+  // Not declared "override": ArrayNodalKernel (is_ad = false) declares a virtual
+  // computeQpOffDiagJacobian(unsigned int) to override, but ADArrayNodalKernel (is_ad = true)
+  // has no such member at all -- only computeOffDiagJacobian(), which is AD-computed and never
+  // calls a per-qp hook. Specialized below exactly like computeQpJacobian() already is: a real
+  // implementation for is_ad = false, mooseError() for is_ad = true.
+  void computeQpOffDiagJacobian(unsigned int jvar);
 
   /// Absorption rate coefficient for the selected rate model
   Real beta(unsigned int n) const;
@@ -72,11 +78,34 @@ protected:
   /// Emission rate coefficient for the selected rate model
   Real alpha(unsigned int n) const;
 
+  /// d(beta(n))/d(vacancy monomer concentration), nonzero only when vacancy_coupled_var is
+  /// given. monomerDiffusivity() is linear in the coupled vacancy monomer value when the
+  /// coupling is active, so this derivative is itself independent of n_comp/solution state
+  /// beyond that one linear factor -- see monomerDiffusivityCouplingDerivative().
+  Real betaPrime(unsigned int n) const;
+
+  /// d(alpha(n))/d(vacancy monomer concentration) = betaPrime(n-1)*exp(-E_b(n)/kT), the same
+  /// chain rule alpha(n) itself already uses (alpha(n) = beta(n-1)*exp(-E_b(n)/kT), and E_b(n)
+  /// does not depend on diffusivity).
+  Real alphaPrime(unsigned int n) const;
+
+  /// d(monomerDiffusivity())/d(vacancy monomer concentration): a true constant when
+  /// vacancy_coupled_var is given, since monomerDiffusivity() = radiation_enhanced_factor *
+  /// diffusivity_base * (vacancy monomer value / _vacancy_c_thermal), and diffusivity_base
+  /// (constant or Arrhenius) does not itself depend on the coupled variable.
+  Real monomerDiffusivityCouplingDerivative() const;
+
   /// Atomic volume used by the interfacial-energy model
   Real atomicVolume() const;
 
   /// Monomer diffusivity used by the interfacial-energy model
   Real monomerDiffusivity() const;
+
+  /// The constant- or Arrhenius-model diffusivity BEFORE radiation_enhanced_factor or the
+  /// vacancy-coupling multiplier are applied. Factored out of monomerDiffusivity() so
+  /// monomerDiffusivityCouplingDerivative() can reuse it without re-deriving the same
+  /// diffusivity_model branch.
+  Real baseDiffusivity() const;
 
   /// Radius of a cluster of size n used by the interfacial-energy model
   Real radius(unsigned int n) const;
@@ -122,6 +151,31 @@ protected:
 
   /// Radiation-enhanced multiplier applied to the monomer diffusivity
   const Real _radiation_enhanced_factor;
+
+  /// Optional DefectDynamics vacancy grouped array variable: when coupled, the monomer
+  /// diffusivity is additionally scaled by the dynamic vacancy supersaturation ratio
+  /// C_v(1,t)/_vacancy_c_thermal. Component 0 of this array is always the vacancy monomer,
+  /// regardless of that species' own grouping scheme (ClusterGroupingLayout::monomerComponent()
+  /// is always 0), so no grouping-layout parameters are needed here. Non-AD only, the same
+  /// pattern PointDefectRecombinationNodalKernel already uses: Coupleable::coupledArrayValue()
+  /// returns a plain, non-AD ArrayVariableValue, and ADArrayNodalKernel::setJacobian()
+  /// unconditionally errors, so an AD variant could never assemble the cross-variable Jacobian
+  /// block this coupling needs.
+  const ArrayVariableValue & _vacancy_array;
+
+  /// Whether vacancy_coupled_var was actually provided.
+  const bool _vacancy_coupling_active;
+
+  /// DOF-map variable number of the coupled vacancy array, for computeQpOffDiagJacobian's own
+  /// jvar guard.
+  const unsigned int _vacancy_var_num;
+
+  /// Vacancy thermal-equilibrium monomer concentration, 4*exp(-E_f/kT) at this kernel's own
+  /// temperature -- computed once at construction from vacancy_formation_energy_eV, using the
+  /// SAME kB/eV constants this kernel's own anonymous namespace already defines, so this is
+  /// bit-identical to DefectDynamicsAction::monomerConcentration()'s own formula and constants,
+  /// not merely numerically close.
+  const Real _vacancy_c_thermal;
 
   /// Interfacial energy sigma for interfacial-energy and thermal-surface binding models
   const Real _sigma;

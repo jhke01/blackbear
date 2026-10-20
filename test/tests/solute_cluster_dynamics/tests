@@ -1,0 +1,22 @@
+[Tests]
+  design = 'SoluteClusterDynamicsAction.md'
+  issues = '#429'
+  [solute_only_action]
+    type = CSVDiff
+    input = solute_only_action.i
+    csvdiff = 'solute_only_action_out.csv'
+    requirement = 'BlackBear shall build a solute-clustering ("Cu-precipitation") problem from a [SoluteClusterDynamics] block with no [DefectDynamics] block present, generating the array variable, initial condition, time-derivative kernel, and ClusterDynamicsGroupedNodalKernel instance from the physical parameters given instead of requiring [GroupedVariables]/[NodalKernels] to be hand-typed, and leaving the point-defect coupling inactive.'
+  []
+  [solute_defect_coupled_action]
+    type = CSVDiff
+    input = solute_defect_coupled_action.i
+    csvdiff = 'solute_defect_coupled_action_out.csv'
+    requirement = 'BlackBear shall automatically couple a [SoluteClusterDynamics] block to a [DefectDynamics] block present in the same input, detecting the vacancy species by geometry = void and wiring vacancy_coupled_var/vacancy_formation_energy_eV onto the solute kernel without either parameter being typed directly, producing a solution identical to the same physics built by hand with the coupling parameters typed explicitly.'
+  []
+  [solute_defect_ambiguous_vacancy_error]
+    type = RunException
+    input = solute_defect_ambiguous_vacancy_error.i
+    expect_err = 'found more than one geometry = void species in the \[DefectDynamics\] block; the vacancy species to couple to is ambiguous'
+    requirement = 'BlackBear shall error when a [SoluteClusterDynamics] block cannot unambiguously identify which species in a [DefectDynamics] block is the vacancy species to couple to, rather than silently picking one.'
+  []
+[]

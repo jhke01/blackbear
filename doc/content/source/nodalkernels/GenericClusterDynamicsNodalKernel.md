@@ -90,6 +90,18 @@ In both diffusivity modes, the computed monomer diffusivity is multiplied by
 1.0 and may be used to represent radiation-enhanced transport without manually rescaling the input
 diffusivity or diffusion prefactor.
 
+Optionally, [!param](/NodalKernels/ClusterDynamicsNodalKernel/vacancy_coupled_var) further
+multiplies the monomer diffusivity by the dynamic vacancy supersaturation ratio
+$C_v(1,t)/C_v^{thermal}$ from a live vacancy monomer concentration evolved elsewhere (by
+[DefectDynamics/index.md]'s own `VacancyVoidGroupedNodalKernel`) -- see
+[SoluteClusterDynamics/index.md], which wires this coupling automatically when a
+`[DefectDynamics]` block is present. This coupling is meant to REPLACE
+`radiation_enhanced_factor`, not combine with it: the static factor is typically calibrated to
+approximate the same enhancement the dynamic supersaturation ratio now computes directly, so
+leaving `radiation_enhanced_factor` at a value other than its default of 1.0 while
+`vacancy_coupled_var` is active double-counts the effect. The kernel issues a warning in that
+case.
+
 The emission coefficient is then derived from the absorption coefficient by detailed balance using the cluster binding energy [!citep](bai2017):
 
 !equation
