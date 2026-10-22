@@ -217,6 +217,9 @@ DefectSpeciesAction::validParams()
 
 namespace
 {
+/// Largest num_cluster_sizes for a species that does not group its array.
+constexpr unsigned int max_ungrouped_cluster_sizes = 3000;
+
 bool
 checkCapillaryInputPair(const InputParameters & params)
 {
@@ -348,10 +351,26 @@ DefectSpeciesAction::clusterSizeFromRadius(Real radius, Real r1, Real radius_exp
 unsigned int
 DefectSpeciesAction::resolvedNumClusterSizes(Real atomic_volume, Real lattice_parameter) const
 {
+  unsigned int n;
   if (_uses_direct_cluster_size_count)
-    return getParam<unsigned int>("num_cluster_sizes");
+    n = getParam<unsigned int>("num_cluster_sizes");
+  else
+  {
+    Real r1, radius_exponent;
+    monomerRadiusLaw(atomic_volume, lattice_parameter, r1, radius_exponent);
+    n = clusterSizeFromRadius(getParam<Real>("max_cluster_radius_m"), r1, radius_exponent);
+  }
 
-  Real r1, radius_exponent;
-  monomerRadiusLaw(atomic_volume, lattice_parameter, r1, radius_exponent);
-  return clusterSizeFromRadius(getParam<Real>("max_cluster_radius_m"), r1, radius_exponent);
+  // Without grouping every size is an unknown, and both the direct solve and the assembly storage
+  // grow much faster than linearly with the unknown count, so a very large ungrouped species would
+  // run for hours or exhaust memory without any message.
+  if (!getParam<bool>("use_grouping") && n > max_ungrouped_cluster_sizes)
+    paramError("use_grouping",
+               "use_grouping = false gives every cluster size its own unknown, so a species may "
+               "have at most ",
+               max_ungrouped_cluster_sizes,
+               " sizes (this one has ",
+               n,
+               "). Set use_grouping = true, or lower the maximum cluster size.");
+  return n;
 }

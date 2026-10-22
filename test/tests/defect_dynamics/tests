@@ -61,6 +61,42 @@
     design = 'GenericDislocationRecoveryNodalKernel.md'
     requirement = 'BlackBear shall compute a dislocation-sink loss using a dislocation density that decreases over time following the closed-form solution of Pokor et al. (2004) Eq 8, instead of a fixed value.'
   []
+  [defect_dynamics_species_grouping_action]
+    type = CSVDiff
+    input = defect_dynamics_species_grouping_action.i
+    csvdiff = 'defect_dynamics_species_grouping_action_out.csv'
+    design = 'DefectDynamicsAction.md DefectSpeciesAction.md'
+    requirement = 'BlackBear shall build a two-species grouped cluster-dynamics problem from a [DefectDynamics] block in which each species sets its own explicit_max, group_spacing, group_linear_width and group_geometric_ratio, so that the two arrays have different bin schedules, and shall give each species kernel the grouping of the other species for its opposite-species terms.'
+  []
+  [defect_dynamics_species_grouping_hand]
+    type = CSVDiff
+    input = defect_dynamics_species_grouping_hand.i
+    csvdiff = 'defect_dynamics_species_grouping_hand_out.csv'
+    design = 'GenericVacancyVoidGroupedNodalKernel.md GenericInterstitialLoopGroupedNodalKernel.md'
+    requirement = 'BlackBear shall solve a void and a loop cluster-dynamics problem built from kernels in which each array and each opposite-species coupling carries its own grouping, giving the reference solution that the [DefectDynamics] action reproduces for the same per-species grouping.'
+  []
+  [defect_dynamics_species_ungrouped_action]
+    type = CSVDiff
+    input = defect_dynamics_species_ungrouped_action.i
+    csvdiff = 'defect_dynamics_species_ungrouped_action_out.csv'
+    design = 'DefectDynamicsAction.md DefectSpeciesAction.md'
+    requirement = 'BlackBear shall let one species of a [DefectDynamics] block turn grouping off with use_grouping = false, giving every cluster size of that species its own unknown, while the other species stays grouped, and shall give each species kernel the layout of the other species for its opposite-species terms.'
+  []
+  [defect_dynamics_species_ungrouped_hand]
+    type = CSVDiff
+    input = defect_dynamics_species_ungrouped_hand.i
+    csvdiff = 'defect_dynamics_species_ungrouped_hand_out.csv'
+    design = 'GenericVacancyVoidGroupedNodalKernel.md GenericInterstitialLoopGroupedNodalKernel.md'
+    requirement = 'BlackBear shall solve a void and a loop cluster-dynamics problem in which the loop arrays have use_grouping = false and the void arrays stay grouped, giving the reference solution that the [DefectDynamics] action reproduces for the same layouts.'
+  []
+  [defect_dynamics_species_ungrouped_too_large_error]
+    type = RunException
+    input = defect_dynamics_species_ungrouped_action.i
+    cli_args = "DefectDynamics/interstitial/num_cluster_sizes=4000"
+    expect_err = "so a species may have at most 3000 sizes"
+    design = 'DefectSpeciesAction.md'
+    requirement = 'BlackBear shall error when a [DefectDynamics] species sets use_grouping = false with more cluster sizes than an ungrouped array can reasonably solve, and shall say how many sizes it has and the limit.'
+  []
   [defect_dynamics_recovery_action]
     type = CSVDiff
     input = defect_dynamics_recovery_action.i
