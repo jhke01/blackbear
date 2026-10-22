@@ -28,13 +28,6 @@
   dislocation_density = 1e15
   recombination_radius = 9e-10
 
-  [Grid]
-    explicit_max = 6
-    spacing = linear
-    linear_width = 4
-    geometric_ratio = 1.5
-  []
-
   [vacancy]
     geometry = loop
     D0 = 1.19073105525e-8
@@ -48,6 +41,10 @@
     Z_loop_opposite = 63.0
     alpha_opposite = 0.8
     num_cluster_sizes = 30
+    explicit_max = 6
+    group_spacing = linear
+    group_linear_width = 4
+    group_geometric_ratio = 1.5
   []
 
   [interstitial]
@@ -63,6 +60,10 @@
     Z_loop_opposite = 33.0
     alpha_opposite = 0.65
     num_cluster_sizes = 30
+    explicit_max = 6
+    group_spacing = linear
+    group_linear_width = 4
+    group_geometric_ratio = 1.5
   []
 []
 

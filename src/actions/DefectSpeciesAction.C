@@ -13,6 +13,7 @@
 /****************************************************************/
 
 #include "DefectSpeciesAction.h"
+#include "DefectDynamicsGridAction.h"
 
 registerMooseAction("BlackBearApp", DefectSpeciesAction, "meta_action");
 
@@ -149,10 +150,38 @@ DefectSpeciesAction::validParams()
       "r1*n^(1/3) for a void, r1*n^(1/2) for a loop). Exactly one of {num_cluster_sizes, "
       "max_cluster_radius_m} must be given.");
 
+  // Grouped-array settings of this cluster type. The names are the ones the kernels, the
+  // postprocessors and [SoluteClusterDynamics] use. A value left unset falls back to the
+  // (deprecated) [Grid] sub-block when there is one, then to these defaults.
+  MooseEnum group_spacing("linear geometric", "linear");
+  params.addParam<bool>("use_grouping",
+                        true,
+                        "Whether this cluster type's array stores sizes above explicit_max in "
+                        "grouped bins (true) or one unknown per size (false). Without grouping "
+                        "every size is an unknown, so it is only practical for small "
+                        "num_cluster_sizes.");
+  params.addParam<unsigned int>(
+      "explicit_max", 100, "Maximum cluster size stored explicitly before the grouped bins.");
+  params.addParam<MooseEnum>(
+      "group_spacing", group_spacing, "Grouped-bin spacing: linear or geometric.");
+  params.addParam<unsigned int>(
+      "group_linear_width", 25, "Fixed bin width when group_spacing = linear.");
+  params.addParam<Real>(
+      "group_geometric_ratio", 1.35, "Bin-width growth factor when group_spacing = geometric.");
+  params.addParam<bool>("enforce_group_nonnegative",
+                        true,
+                        "Whether to limit the grouped L0/L1 reconstruction so bin endpoint "
+                        "concentrations stay nonnegative (up to the tolerance factor).");
+  params.addParam<Real>("group_nonnegative_tolerance_factor",
+                        0.0,
+                        "Relaxation factor for the nonnegativity limit: endpoint concentrations "
+                        "may go down to -factor * L0 before being limited.");
+
   params.addParam<Real>(
       "resolvable_radius",
       0.0,
-      "If positive, adds a number-density and average-radius postprocessor pair for this "
+      "If positive, adds a number-density and average-radius postprocessor pair "
+      "(<name>_resolvable_density, <name>_resolvable_avg_radius) for this "
       "species, counting only clusters at or above this radius [m] -- the smallest cluster size "
       "resolvable by whatever characterization technique the input is being compared against "
       "(e.g. TEM). Left at zero (the default), no such postprocessors are added for this "
@@ -248,6 +277,47 @@ DefectSpeciesAction::DefectSpeciesAction(const InputParameters & params)
   if (cascade_f2 + cascade_f3 + cascade_f4 > 1.0)
     mooseError("DefectSpeciesAction requires cascade_f2 + cascade_f3 + cascade_f4 <= 1, so the "
               "monomer's own remaining fraction of the generation rate does not go negative.");
+}
+
+DefectSpeciesAction::Grouping
+DefectSpeciesAction::grouping(const DefectDynamicsGridAction * grid) const
+{
+  // A value this species set itself wins; otherwise the [Grid] sub-block's, if there is one;
+  // otherwise this species' own default (identical to the [Grid] defaults).
+  auto own = [this](const std::string & name) { return parameters().isParamSetByUser(name); };
+
+  Grouping g;
+  g.use_grouping = getParam<bool>("use_grouping");
+  g.explicit_max = own("explicit_max") || !grid ? getParam<unsigned int>("explicit_max")
+                                                : grid->getParam<unsigned int>("explicit_max");
+  g.spacing = own("group_spacing") || !grid ? getParam<MooseEnum>("group_spacing")
+                                            : grid->getParam<MooseEnum>("spacing");
+  g.linear_width = own("group_linear_width") || !grid
+                       ? getParam<unsigned int>("group_linear_width")
+                       : grid->getParam<unsigned int>("linear_width");
+  g.geometric_ratio = own("group_geometric_ratio") || !grid
+                          ? getParam<Real>("group_geometric_ratio")
+                          : grid->getParam<Real>("geometric_ratio");
+  g.enforce_nonnegative = own("enforce_group_nonnegative") || !grid
+                              ? getParam<bool>("enforce_group_nonnegative")
+                              : grid->getParam<bool>("enforce_nonnegative");
+  g.tolerance_factor = own("group_nonnegative_tolerance_factor") || !grid
+                           ? getParam<Real>("group_nonnegative_tolerance_factor")
+                           : grid->getParam<Real>("tolerance_factor");
+  return g;
+}
+
+ClusterGroupingLayout
+DefectSpeciesAction::layout(unsigned int num_cluster_sizes,
+                            const DefectDynamicsGridAction * grid) const
+{
+  const auto g = grouping(grid);
+  return ClusterGroupingLayout(num_cluster_sizes,
+                               g.explicit_max,
+                               g.use_grouping,
+                               g.spacing.getEnum<ClusterGroupingSpacing>(),
+                               g.linear_width,
+                               g.geometric_ratio);
 }
 
 void

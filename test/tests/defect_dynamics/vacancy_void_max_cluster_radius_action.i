@@ -24,13 +24,6 @@
   cascade_efficiency = 0.1
   dislocation_density = 0
 
-  [Grid]
-    explicit_max = 6
-    spacing = linear
-    linear_width = 4
-    geometric_ratio = 1.5
-  []
-
   [vacancy]
     geometry = void
     D0 = 1.19073105525e-8
@@ -40,6 +33,10 @@
     exponent = 0.67
     max_cluster_radius_m = 4.3714621134095103e-10
     resolvable_radius = 1.6e-10
+    explicit_max = 6
+    group_spacing = linear
+    group_linear_width = 4
+    group_geometric_ratio = 1.5
   []
 []
 

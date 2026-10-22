@@ -116,10 +116,10 @@
   [defect_dynamics_cascade_explicit_max_error]
     type = RunException
     input = vacancy_void_grouped_small_action.i
-    cli_args = "DefectDynamics/Grid/explicit_max=3 DefectDynamics/vacancy/cascade_f2=0.1"
-    expect_err = "requires \[Grid\]'s explicit_max >= 4 when species 'vacancy' has cascade seeding active"
+    cli_args = "DefectDynamics/vacancy/explicit_max=3 DefectDynamics/vacancy/cascade_f2=0.1"
+    expect_err = "requires explicit_max >= 4 when species 'vacancy' has cascade seeding active"
     design = 'DefectDynamicsAction.md'
-    requirement = 'BlackBear shall error when a [DefectDynamics] species sub-block has cascade seeding active but [Grid] own explicit_max is below 4, since cluster sizes 2-4 would not all have explicit array components to seed.'
+    requirement = 'BlackBear shall error when a [DefectDynamics] species sub-block has cascade seeding active but its own explicit_max is below 4, since cluster sizes 2-4 would not all have explicit array components to seed.'
   []
   [defect_dynamics_recovery_and_cascade_action]
     type = CSVDiff

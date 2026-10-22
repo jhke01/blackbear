@@ -18,6 +18,11 @@
 #include "ClusterGroupingLayout.h"
 
 /**
+ * DEPRECATED. Each species sub-block now holds its own grouping (DefectSpeciesAction), using the
+ * same parameter names as the kernels and [SoluteClusterDynamics]. This block remains only so
+ * existing inputs keep working: it supplies a value a species leaves unset, and a value the species
+ * sets itself takes priority.
+ *
  * The [DefectDynamics/Grid] sub-block: the grouped-tail SHAPE (explicit_max, spacing,
  * linear_width, geometric_ratio, enforce_nonnegative, tolerance_factor) shared by every species
  * added under the enclosing [DefectDynamics] block. The maximum cluster SIZE itself

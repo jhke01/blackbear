@@ -13,6 +13,8 @@
 /****************************************************************/
 
 #include "SoluteClusterDynamicsAction.h"
+
+#include <cmath>
 #include "DefectSpeciesAction.h"
 #include "DefectDynamicsAction.h"
 
@@ -156,10 +158,23 @@ SoluteClusterDynamicsAction::validParams()
       "Formation energies [eV] for binding_energy_model = formation_energy_table. Entry 0 "
       "corresponds to cluster size n = 1.");
 
-  params.addParam<unsigned int>(
+  params.addParam<Real>(
+      "resolvable_radius",
+      0.0,
+      "If positive, adds a number-density and average-radius postprocessor pair "
+      "(<name>_resolvable_density, <name>_resolvable_avg_radius) counting only clusters at or "
+      "above this radius [m] -- the smallest cluster resolvable by whatever characterization "
+      "technique the input is compared against (e.g. atom probe). Same name and meaning as "
+      "resolvable_radius on a [DefectDynamics] species. The radius is converted to a cluster size "
+      "with the same spherical law the solute kernel uses, r_n = (3 n V_at / 4 pi)^(1/3), "
+      "using atomic_volume. Left at zero (the default), no such postprocessors are added.");
+  params.addDeprecatedParam<unsigned int>(
       "density_n_minimum",
       1,
-      "Smallest cluster size included in the total_cluster_density postprocessor.");
+      "Smallest cluster size included in the <name>_total_density postprocessor.",
+      "density_n_minimum is deprecated; <name>_total_density keeps counting every cluster size "
+      "from this value up. Use resolvable_radius, which adds <name>_resolvable_density and "
+      "<name>_resolvable_avg_radius.");
 
   return params;
 }
@@ -378,5 +393,53 @@ SoluteClusterDynamicsAction::actAddPostprocessors()
     params.set<bool>("enforce_group_nonnegative") = enforce_nonnegative;
     params.set<Real>("group_nonnegative_tolerance_factor") = tolerance_factor;
     _problem->addPostprocessor("ClusterTotalDensityGrouped", name() + "_total_density", params);
+  }
+
+  // Resolvable-cluster density and mean radius, with the same names and meaning as on a
+  // [DefectDynamics] species.
+  const Real resolvable_radius = getParam<Real>("resolvable_radius");
+  if (resolvable_radius <= 0.0)
+    return;
+  const Real atomic_volume = getParam<Real>("atomic_volume");
+  if (atomic_volume <= 0.0)
+    paramError("resolvable_radius", "requires atomic_volume > 0, to convert the radius to a size.");
+
+  // Monomer radius of the spherical law the solute kernel uses: r_n = r1 * n^(1/3).
+  const Real r1 = std::cbrt(3.0 * atomic_volume / (4.0 * libMesh::pi));
+  const unsigned int n_minimum =
+      static_cast<unsigned int>(std::ceil(std::pow(resolvable_radius / r1, 3.0)));
+
+  {
+    InputParameters params = _factory.getValidParams("ClusterTotalDensityGrouped");
+    params.set<std::vector<VariableName>>("clusters") = {var_name};
+    params.set<unsigned int>("n_minimum") = n_minimum;
+    params.set<Real>("atomic_volume") = atomic_volume;
+    params.set<unsigned int>("num_cluster_sizes") = num_cluster_sizes;
+    params.set<bool>("use_grouping") = use_grouping;
+    params.set<unsigned int>("explicit_max") = explicit_max;
+    params.set<MooseEnum>("group_spacing") = group_spacing;
+    params.set<unsigned int>("group_linear_width") = group_linear_width;
+    params.set<Real>("group_geometric_ratio") = group_geometric_ratio;
+    params.set<bool>("enforce_group_nonnegative") = enforce_nonnegative;
+    params.set<Real>("group_nonnegative_tolerance_factor") = tolerance_factor;
+    _problem->addPostprocessor(
+        "ClusterTotalDensityGrouped", name() + "_resolvable_density", params);
+  }
+  {
+    InputParameters params = _factory.getValidParams("ClusterAverageRadiusGrouped");
+    params.set<std::vector<VariableName>>("clusters") = {var_name};
+    params.set<Real>("r1") = r1;
+    params.set<Real>("radius_exponent") = 1.0 / 3.0;
+    params.set<unsigned int>("n_minimum") = n_minimum;
+    params.set<unsigned int>("num_cluster_sizes") = num_cluster_sizes;
+    params.set<bool>("use_grouping") = use_grouping;
+    params.set<unsigned int>("explicit_max") = explicit_max;
+    params.set<MooseEnum>("group_spacing") = group_spacing;
+    params.set<unsigned int>("group_linear_width") = group_linear_width;
+    params.set<Real>("group_geometric_ratio") = group_geometric_ratio;
+    params.set<bool>("enforce_group_nonnegative") = enforce_nonnegative;
+    params.set<Real>("group_nonnegative_tolerance_factor") = tolerance_factor;
+    _problem->addPostprocessor(
+        "ClusterAverageRadiusGrouped", name() + "_resolvable_avg_radius", params);
   }
 }

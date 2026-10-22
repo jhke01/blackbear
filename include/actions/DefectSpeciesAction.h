@@ -15,7 +15,10 @@
 #pragma once
 
 #include "Action.h"
+#include "ClusterGroupingLayout.h"
 #include "MooseEnum.h"
+
+class DefectDynamicsGridAction;
 
 /**
  * One defect species sub-block under [DefectDynamics] (e.g. [vacancy], [interstitial]). The
@@ -66,6 +69,28 @@ public:
   /// DefectDynamicsAction's resolvable_radius (n_minimum) -- the same inversion, two different
   /// physical radii.
   static unsigned int clusterSizeFromRadius(Real radius, Real r1, Real radius_exponent);
+
+  /// The grouped-array settings of one cluster type, resolved from (in priority order) this species'
+  /// own use_grouping/explicit_max/group_* parameters, the enclosing block's deprecated [Grid]
+  /// sub-block when it exists, and the built-in defaults.
+  struct Grouping
+  {
+    bool use_grouping = true;
+    unsigned int explicit_max = 100;
+    MooseEnum spacing = MooseEnum("linear geometric", "linear");
+    unsigned int linear_width = 25;
+    Real geometric_ratio = 1.35;
+    bool enforce_nonnegative = true;
+    Real tolerance_factor = 0.0;
+  };
+
+  /// This species' grouping settings. `grid` is the enclosing block's [Grid] sub-block (deprecated,
+  /// nullptr if none): it only supplies a value this species did not set itself.
+  Grouping grouping(const DefectDynamicsGridAction * grid) const;
+
+  /// The layout of this species' array for a maximum cluster size of num_cluster_sizes.
+  ClusterGroupingLayout layout(unsigned int num_cluster_sizes,
+                               const DefectDynamicsGridAction * grid) const;
 
 protected:
   const bool _uses_direct_capillary_coefficients;

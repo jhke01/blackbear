@@ -108,14 +108,16 @@ DefectDynamicsAction::DefectDynamicsAction(const InputParameters & params) : Act
 const DefectDynamicsGridAction *
 DefectDynamicsAction::grid() const
 {
+  // The shared [Grid] sub-block is deprecated: each species now holds its own grouping. When it is
+  // present it only supplies a value a species did not set itself.
   const auto grids = _awh.getActions<DefectDynamicsGridAction>();
   if (grids.empty())
-    mooseError(
-        "[DefectDynamics] requires exactly one [Grid] sub-block describing the shared grouped "
-        "layout.");
+    return nullptr;
   if (grids.size() > 1)
-    mooseError("[DefectDynamics] found ", grids.size(), " [Grid] sub-blocks; exactly one is "
-              "expected.");
+    mooseError("[DefectDynamics] found ",
+               grids.size(),
+               " [Grid] sub-blocks; at most one is "
+               "expected.");
   return grids[0];
 }
 
@@ -239,7 +241,7 @@ DefectDynamicsAction::actAddVariables()
   for (const auto * sp : species())
   {
     const auto layout =
-        grid_action->layout(sp->resolvedNumClusterSizes(atomic_volume, lattice_parameter));
+        sp->layout(sp->resolvedNumClusterSizes(atomic_volume, lattice_parameter), grid_action);
     InputParameters params = _factory.getValidParams("ArrayMooseVariable");
     params.set<MooseEnum>("family") = "LAGRANGE";
     params.set<MooseEnum>("order") = "FIRST";
@@ -278,13 +280,12 @@ DefectDynamicsAction::actAddICs()
     params.set<FunctionName>("function") = functionName(*sp);
     params.set<unsigned int>("num_cluster_sizes") =
         sp->resolvedNumClusterSizes(atomic_volume, lattice_parameter);
-    params.set<bool>("use_grouping") = true;
-    params.set<unsigned int>("explicit_max") = grid_action->getParam<unsigned int>("explicit_max");
-    params.set<MooseEnum>("group_spacing") = grid_action->getParam<MooseEnum>("spacing");
-    params.set<unsigned int>("group_linear_width") =
-        grid_action->getParam<unsigned int>("linear_width");
-    params.set<Real>("group_geometric_ratio") =
-        grid_action->getParam<Real>("geometric_ratio");
+    const auto g = sp->grouping(grid_action);
+    params.set<bool>("use_grouping") = g.use_grouping;
+    params.set<unsigned int>("explicit_max") = g.explicit_max;
+    params.set<MooseEnum>("group_spacing") = g.spacing;
+    params.set<unsigned int>("group_linear_width") = g.linear_width;
+    params.set<Real>("group_geometric_ratio") = g.geometric_ratio;
     _problem->addInitialCondition("GroupedArrayFunctionIndexIC", sp->name() + "_ic", params);
   }
 }
@@ -312,16 +313,19 @@ DefectDynamicsAction::actAddNodalKernels()
   };
 
   // Cascade seeding (sizes 2-4) needs explicit (ungrouped) components for those sizes to exist
-  // at all; checked once here (shared [Grid] shape) plus per species (its own resolved cap) for
-  // whichever species has cascade seeding active.
+  // at all; checked per species (its own grouping and resolved cap) for whichever species has
+  // cascade seeding active.
   for (const auto * sp : sp_list)
   {
     if (!cascadeActive(*sp))
       continue;
-    if (grid_action->getParam<unsigned int>("explicit_max") < 4)
-      mooseError("[DefectDynamics] requires [Grid]'s explicit_max >= 4 when species '",
-                sp->name(), "' has cascade seeding active, but explicit_max = ",
-                grid_action->getParam<unsigned int>("explicit_max"), ".");
+    const auto g = sp->grouping(grid_action);
+    if (g.use_grouping && g.explicit_max < 4)
+      mooseError("[DefectDynamics] requires explicit_max >= 4 when species '",
+                 sp->name(),
+                 "' has cascade seeding active, but explicit_max = ",
+                 g.explicit_max,
+                 ".");
     if (sp->resolvedNumClusterSizes(atomic_volume, lattice_parameter) < 4)
       mooseError("[DefectDynamics] requires species '", sp->name(), "' to represent at least "
                 "cluster size 4 when its own cascade_f2/cascade_f3/cascade_f4 are active.");
@@ -337,13 +341,6 @@ DefectDynamicsAction::actAddNodalKernels()
     paramWarning("dislocation_density",
                 "dislocation_density is unused when a [Recovery] sub-block is given: the "
                 "entire dislocation sink comes from [Recovery]'s own rho0 instead.");
-
-  const unsigned int explicit_max = grid_action->getParam<unsigned int>("explicit_max");
-  const auto group_spacing = grid_action->getParam<MooseEnum>("spacing");
-  const unsigned int group_linear_width = grid_action->getParam<unsigned int>("linear_width");
-  const Real group_geometric_ratio = grid_action->getParam<Real>("geometric_ratio");
-  const bool enforce_nonnegative = grid_action->getParam<bool>("enforce_nonnegative");
-  const Real tolerance_factor = grid_action->getParam<Real>("tolerance_factor");
 
   // Exactly one void species is still required when two species are present: Pokor's own
   // dislocation-bias absorption model (Eqs 4a-4f) treats BOTH clusters identically (same loop
@@ -427,13 +424,15 @@ DefectDynamicsAction::actAddNodalKernels()
 
     params.set<unsigned int>("num_cluster_sizes") =
         sp->resolvedNumClusterSizes(atomic_volume, lattice_parameter);
-    params.set<bool>("use_grouping") = true;
-    params.set<unsigned int>("explicit_max") = explicit_max;
-    params.set<MooseEnum>("group_spacing") = group_spacing;
-    params.set<unsigned int>("group_linear_width") = group_linear_width;
-    params.set<Real>("group_geometric_ratio") = group_geometric_ratio;
-    params.set<bool>("enforce_group_nonnegative") = enforce_nonnegative;
-    params.set<Real>("group_nonnegative_tolerance_factor") = tolerance_factor;
+    // This species' OWN array grouping (its variable, its kernel and its IC all use it).
+    const auto own_grouping = sp->grouping(grid_action);
+    params.set<bool>("use_grouping") = own_grouping.use_grouping;
+    params.set<unsigned int>("explicit_max") = own_grouping.explicit_max;
+    params.set<MooseEnum>("group_spacing") = own_grouping.spacing;
+    params.set<unsigned int>("group_linear_width") = own_grouping.linear_width;
+    params.set<Real>("group_geometric_ratio") = own_grouping.geometric_ratio;
+    params.set<bool>("enforce_group_nonnegative") = own_grouping.enforce_nonnegative;
+    params.set<Real>("group_nonnegative_tolerance_factor") = own_grouping.tolerance_factor;
 
     // When this species has cascade seeding active, its own CascadeSpectrumNodalKernel instance
     // (added below) seeds cluster sizes 2-4 directly; the monomer's own share of the generation
@@ -485,13 +484,17 @@ DefectDynamicsAction::actAddNodalKernels()
       params.set<std::vector<VariableName>>("opposite_coupled_var") = {variableName(*opposite)};
       params.set<unsigned int>("opposite_num_cluster_sizes") =
           opposite->resolvedNumClusterSizes(atomic_volume, lattice_parameter);
-      params.set<bool>("opposite_use_grouping") = true;
-      params.set<unsigned int>("opposite_explicit_max") = explicit_max;
-      params.set<MooseEnum>("opposite_group_spacing") = group_spacing;
-      params.set<unsigned int>("opposite_group_linear_width") = group_linear_width;
-      params.set<Real>("opposite_group_geometric_ratio") = group_geometric_ratio;
-      params.set<bool>("opposite_enforce_group_nonnegative") = enforce_nonnegative;
-      params.set<Real>("opposite_group_nonnegative_tolerance_factor") = tolerance_factor;
+      // The kernel rebuilds the PARTNER's array to sum its absorption (Piece B), so it must be
+      // given the partner's own grouping, not this species'.
+      const auto partner_grouping = opposite->grouping(grid_action);
+      params.set<bool>("opposite_use_grouping") = partner_grouping.use_grouping;
+      params.set<unsigned int>("opposite_explicit_max") = partner_grouping.explicit_max;
+      params.set<MooseEnum>("opposite_group_spacing") = partner_grouping.spacing;
+      params.set<unsigned int>("opposite_group_linear_width") = partner_grouping.linear_width;
+      params.set<Real>("opposite_group_geometric_ratio") = partner_grouping.geometric_ratio;
+      params.set<bool>("opposite_enforce_group_nonnegative") = partner_grouping.enforce_nonnegative;
+      params.set<Real>("opposite_group_nonnegative_tolerance_factor") =
+          partner_grouping.tolerance_factor;
 
       if (is_void)
       {
@@ -598,17 +601,15 @@ namespace
 /// postprocessor/vector postprocessor onto params, so each caller only needs to set the
 /// object-specific parameters (clusters, num_cluster_sizes, n_minimum/n_size, r1, etc.).
 void
-setGroupingLayoutParams(InputParameters & params, const DefectDynamicsGridAction & grid_action)
+setGroupingLayoutParams(InputParameters & params, const DefectSpeciesAction::Grouping & g)
 {
-  params.set<unsigned int>("explicit_max") = grid_action.getParam<unsigned int>("explicit_max");
-  params.set<MooseEnum>("group_spacing") = grid_action.getParam<MooseEnum>("spacing");
-  params.set<unsigned int>("group_linear_width") =
-      grid_action.getParam<unsigned int>("linear_width");
-  params.set<Real>("group_geometric_ratio") = grid_action.getParam<Real>("geometric_ratio");
-  params.set<bool>("enforce_group_nonnegative") =
-      grid_action.getParam<bool>("enforce_nonnegative");
-  params.set<Real>("group_nonnegative_tolerance_factor") =
-      grid_action.getParam<Real>("tolerance_factor");
+  params.set<bool>("use_grouping") = g.use_grouping;
+  params.set<unsigned int>("explicit_max") = g.explicit_max;
+  params.set<MooseEnum>("group_spacing") = g.spacing;
+  params.set<unsigned int>("group_linear_width") = g.linear_width;
+  params.set<Real>("group_geometric_ratio") = g.geometric_ratio;
+  params.set<bool>("enforce_group_nonnegative") = g.enforce_nonnegative;
+  params.set<Real>("group_nonnegative_tolerance_factor") = g.tolerance_factor;
 }
 } // namespace
 
@@ -630,7 +631,7 @@ DefectDynamicsAction::actAddPostprocessors()
       params.set<std::vector<VariableName>>("clusters") = {var_name};
       params.set<unsigned int>("n_size") = 1;
       params.set<unsigned int>("num_cluster_sizes") = num_cluster_sizes;
-      setGroupingLayoutParams(params, *grid_action);
+      setGroupingLayoutParams(params, sp->grouping(grid_action));
       _problem->addPostprocessor(
           "ClusterSizeConcentrationGrouped", sp->name() + "_monomer_concentration", params);
     }
@@ -650,7 +651,7 @@ DefectDynamicsAction::actAddPostprocessors()
       params.set<unsigned int>("n_minimum") = n_minimum;
       params.set<Real>("atomic_volume") = atomic_volume;
       params.set<unsigned int>("num_cluster_sizes") = num_cluster_sizes;
-      setGroupingLayoutParams(params, *grid_action);
+      setGroupingLayoutParams(params, sp->grouping(grid_action));
       _problem->addPostprocessor(
           "ClusterTotalDensityGrouped", sp->name() + "_resolvable_density", params);
     }
@@ -661,7 +662,7 @@ DefectDynamicsAction::actAddPostprocessors()
       params.set<Real>("radius_exponent") = radius_exponent;
       params.set<unsigned int>("n_minimum") = n_minimum;
       params.set<unsigned int>("num_cluster_sizes") = num_cluster_sizes;
-      setGroupingLayoutParams(params, *grid_action);
+      setGroupingLayoutParams(params, sp->grouping(grid_action));
       _problem->addPostprocessor(
           "ClusterAverageRadiusGrouped", sp->name() + "_resolvable_avg_radius", params);
     }
@@ -716,7 +717,7 @@ DefectDynamicsAction::actAddVectorPostprocessors()
     params.set<unsigned int>("num_cluster_sizes") = num_cluster_sizes;
     params.set<Real>("r1") = r1;
     params.set<Real>("radius_exponent") = radius_exponent;
-    setGroupingLayoutParams(params, *grid_action);
+    setGroupingLayoutParams(params, sp->grouping(grid_action));
     params.set<std::vector<OutputName>>("outputs") = {output_name};
     _problem->addVectorPostprocessor(
         "ClusterSizeDistributionGrouped", sp->name() + "_size_distribution", params);

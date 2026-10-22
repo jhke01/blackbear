@@ -24,13 +24,6 @@
   cascade_efficiency = 0.1
   dislocation_density = 1e15
 
-  [Grid]
-    explicit_max = 6
-    spacing = linear
-    linear_width = 4
-    geometric_ratio = 1.5
-  []
-
   [vacancy]
     geometry = void
     D0 = 1.19073105525e-8
@@ -43,6 +36,10 @@
     cascade_f2 = 0.2
     cascade_f3 = 0.05
     cascade_f4 = 0.02
+    explicit_max = 6
+    group_spacing = linear
+    group_linear_width = 4
+    group_geometric_ratio = 1.5
   []
 
   [interstitial]
@@ -61,6 +58,10 @@
     cascade_f2 = 0.05
     cascade_f3 = 0.05
     cascade_f4 = 0.1
+    explicit_max = 6
+    group_spacing = linear
+    group_linear_width = 4
+    group_geometric_ratio = 1.5
   []
 []
 

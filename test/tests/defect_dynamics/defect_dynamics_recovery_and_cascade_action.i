@@ -26,13 +26,6 @@
   dpa_rate = 1.5e-3
   cascade_efficiency = 0.1
 
-  [Grid]
-    explicit_max = 6
-    spacing = linear
-    linear_width = 4
-    geometric_ratio = 1.5
-  []
-
   [Recovery]
     rho0 = 1e15
     K = 5e13
@@ -51,6 +44,10 @@
     cascade_f2 = 0.2
     cascade_f3 = 0.05
     cascade_f4 = 0.02
+    explicit_max = 6
+    group_spacing = linear
+    group_linear_width = 4
+    group_geometric_ratio = 1.5
   []
 
   [interstitial]
@@ -69,6 +66,10 @@
     cascade_f2 = 0.05
     cascade_f3 = 0.05
     cascade_f4 = 0.1
+    explicit_max = 6
+    group_spacing = linear
+    group_linear_width = 4
+    group_geometric_ratio = 1.5
   []
 []
 
