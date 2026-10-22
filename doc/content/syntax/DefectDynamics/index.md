@@ -214,6 +214,23 @@ for the second sync time. Within a grouped (large-$n$) bin, the reconstructed va
 bin's own linear fit (its stored $L_0$/$L_1$ moments), so they are not independent data -- see
 [ClusterSizeDistributionGrouped.md] for the reconstruction formula.
 
+## Console Output at Large Cluster Counts
+
+MOOSE's console prints a residual norm for the variables with the largest residuals, and it
+computes that norm separately for every component of an array variable. With hundreds of
+thousands of cluster sizes, that costs a noticeable share of each time step (about a quarter of the
+run time in a case with 400,000 sizes per species). Set
+`outlier_variable_norms = false` in the console output to skip it; the solution is not affected.
+
+```
+[Outputs]
+  [console]
+    type = Console
+    outlier_variable_norms = false
+  []
+[]
+```
+
 ## Disabling or Omitting a Term
 
 Setting `dislocation_density = 0` turns off the dislocation sink for every species (unless
