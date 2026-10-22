@@ -1,6 +1,5 @@
-# [DefectDynamics] action equivalent of a hand-built two-geometry=loop [NodalKernels] block (see
-# blackbear_runs/cdDefectDynamics_pokorTable3_test/sa304_osiris_vacancy_as_loop.i for the full-scale
-# validated precedent this reproduces the KERNEL WIRING of): vacancy modeled as geometry = loop
+# [DefectDynamics] action equivalent of a hand-built two-geometry=loop [NodalKernels] block:
+# vacancy modeled as geometry = loop
 # (following Pokor et al. 2004's own Eqs 4a-4f, which treat vacancy and interstitial clusters with
 # the same 2-D loop absorption form), coupled to an interstitial geometry = loop species through
 # both opposite-species absorption (default on) and point-defect recombination

@@ -10,8 +10,7 @@
 # ~1e9-scale, far outside what PETSc's -snes_test_jacobian can resolve with
 # its single global finite-difference step length). This was independently
 # cross-checked against a from-scratch Python re-derivation of the exact
-# residual/Jacobian before trusting this PETSc-reported ratio (see
-# verify_opposite_absorption.py in blackbear_runs/cdDefectDynamics_yang573_test).
+# residual/Jacobian before trusting this PETSc-reported ratio.
 
 [Mesh]
   type = SingleNodeMesh
