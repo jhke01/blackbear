@@ -97,8 +97,11 @@ Z_i(n) = Z_{i,0} + \left[\sqrt{\frac{b}{8\pi a_0}}Z_{loop,i} - Z_{i,0}\right]
 n^{-\alpha_{loop,i}/2},
 
 with the interstitial-monomer diffusivity $D_i = D_{0,i}\exp(-E_{m,i}/k_BT)$.
-$Z_i(n)$ interpolates from the small-loop bias $Z_{i,0}$ to the large-loop
-bias $Z_{loop,i}$ as $n$ grows.
+$Z_i(n)$ is $\sqrt{b/(8\pi a_0)}\,Z_{loop,i}$ at $n=1$ (about $0.152\,Z_{loop,i}$ for
+$b=a_0/\sqrt3$) and approaches $Z_{i,0}$ as $n$ grows, so $Z_{i,0}$ is the
+large-loop bias and $Z_{loop,i}$ sets the small-loop bias. The exponent
+$\alpha_{loop,i}$ controls how fast the approach is. A constant bias $Z_i(n)=Z_{i,0}$
+at every size therefore needs $Z_{loop,i}=Z_{i,0}/\sqrt{b/(8\pi a_0)}$.
 
 ### Capillary-Law Thermal Emission
 

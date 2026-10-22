@@ -97,6 +97,21 @@
     design = 'DefectSpeciesAction.md'
     requirement = 'BlackBear shall error when a [DefectDynamics] species sets use_grouping = false with more cluster sizes than an ungrouped array can reasonably solve, and shall say how many sizes it has and the limit.'
   []
+  [defect_dynamics_bias_constant_action]
+    type = CSVDiff
+    input = defect_dynamics_bias_constant_action.i
+    csvdiff = 'defect_dynamics_bias_constant_action_out.csv'
+    design = 'DefectDynamicsAction.md DefectSpeciesAction.md'
+    requirement = 'BlackBear shall give a loop species with bias = constant a dislocation bias equal to its Z at every cluster size, by choosing the large-size coefficient Z_loop = Z / sqrt(b / (8 pi a0)) for both its own absorption and its absorption of the opposite species.'
+  []
+  [defect_dynamics_bias_constant_other_alpha]
+    type = CSVDiff
+    input = defect_dynamics_bias_constant_action.i
+    cli_args = "DefectDynamics/interstitial/alpha=0.8 DefectDynamics/interstitial/alpha_opposite=0.65 Outputs/file_base=defect_dynamics_bias_constant_other_alpha_out"
+    csvdiff = 'defect_dynamics_bias_constant_other_alpha_out.csv'
+    design = 'DefectSpeciesAction.md'
+    requirement = 'BlackBear shall give the same result for a loop species with bias = constant whatever values are given for alpha and alpha_opposite, because a constant bias does not depend on the exponent.'
+  []
   [defect_dynamics_recovery_action]
     type = CSVDiff
     input = defect_dynamics_recovery_action.i

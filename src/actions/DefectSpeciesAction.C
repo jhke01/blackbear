@@ -98,30 +98,34 @@ DefectSpeciesAction::validParams()
       "Z",
       1.0,
       "Dislocation-sink bias Z for this species' monomer (used for the background dislocation "
-      "sink, D*Z*dislocation_density). For a loop, Z is ALSO the small-n limit of this species' "
+      "sink, D*Z*dislocation_density). For a loop, Z is ALSO the large-n limit of this species' "
       "own self-absorption bias law below (geometry = loop only).");
   params.addParam<Real>(
       "Z_loop",
       1.0,
-      "Large-n limit of this species' own self-absorption dislocation bias, approached as "
-      "n -> infinity (geometry = loop only; a void has no bias law).");
+      "Coefficient of this species' own self-absorption dislocation bias at the smallest sizes: "
+      "Z(n) = Z + [sqrt(b/(8 pi a0)) * Z_loop - Z] * n^(-alpha/2), so Z(1) = sqrt(b/(8 pi a0)) * "
+      "Z_loop (about 0.152 * Z_loop for b = a0/sqrt(3)) and Z(n) -> Z as n -> infinity "
+      "(geometry = loop only; a void has no bias law).");
   params.addParam<Real>(
       "alpha",
       1.0,
-      "Exponent controlling how fast this species' own self-absorption bias approaches Z_loop "
-      "with size (geometry = loop only).");
+      "Exponent controlling how fast this species' own self-absorption bias approaches Z with "
+      "size (geometry = loop only).");
 
   params.addParam<Real>(
       "Z_loop_opposite",
       1.0,
-      "Large-n limit of this LOOP's bias for absorbing the OPPOSITE species' monomer "
-      "(geometry = loop only, meaningful only when both species are present). The small-n limit "
-      "is the opposite species' own Z; there is nothing else to supply here.");
+      "Coefficient of this LOOP's bias for absorbing the OPPOSITE species' monomer at the smallest "
+      "sizes, scaled by sqrt(b/(8 pi a0)) as for Z_loop (geometry = loop only, meaningful only "
+      "when "
+      "both species are present). The large-n limit is the opposite species' own Z; there is "
+      "nothing else to supply here.");
   params.addParam<Real>(
       "alpha_opposite",
       1.0,
-      "Exponent controlling how fast this loop's opposite-species-absorption bias approaches "
-      "Z_loop_opposite with size (geometry = loop only).");
+      "Exponent controlling how fast this loop's opposite-species-absorption bias approaches the "
+      "opposite species' Z with size (geometry = loop only).");
 
   params.addParam<Real>(
       "burgers_vector",
@@ -134,8 +138,8 @@ DefectSpeciesAction::validParams()
       "bias",
       bias,
       "Whether this species' own self-absorption bias (geometry = loop only) uses the full "
-      "size-dependent law (Z, Z_loop, alpha) or a single constant value (Z only, i.e. "
-      "equivalent to Z_loop = Z).");
+      "size-dependent law (Z, Z_loop, alpha) or a single constant value Z at every size (Z only; "
+      "Z_loop is then chosen as Z / sqrt(b/(8 pi a0)), see the theory page).");
 
   params.addParam<unsigned int>(
       "num_cluster_sizes",

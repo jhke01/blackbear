@@ -61,8 +61,10 @@ $Z_{i,0}$, $Z_{loop,i}$, and $\alpha_{loop,i}$ are
 [!param](/NodalKernels/InterstitialLoopGroupedNodalKernel/z_i),
 [!param](/NodalKernels/InterstitialLoopGroupedNodalKernel/z_loop_i), and
 [!param](/NodalKernels/InterstitialLoopGroupedNodalKernel/alpha_loop_i). $Z_i(n)$
-interpolates from the small-loop bias $Z_{i,0}$ to the large-loop bias
-$Z_{loop,i}$ as $n$ grows.
+is $\sqrt{b/(8\pi a_0)}\,Z_{loop,i}$ at $n=1$ (about $0.152\,Z_{loop,i}$ for
+$b=a_0/\sqrt3$) and approaches $Z_{i,0}$ as $n$ grows. So $Z_{i,0}$ is the large-loop
+bias and $Z_{loop,i}$ sets the small-loop bias. A constant bias equal to
+$Z_{i,0}$ at every size needs $Z_{loop,i}=Z_{i,0}/\sqrt{b/(8\pi a_0)}$.
 
 Thermal emission follows detailed balance from a binding energy $E_b(n)$,
 

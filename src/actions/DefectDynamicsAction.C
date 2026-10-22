@@ -27,6 +27,20 @@ namespace
 // numerically close.
 constexpr Real defect_dynamics_kB = 1.380649e-23;
 constexpr Real defect_dynamics_eV = 1.602176634e-19;
+
+/**
+ * Z_loop that makes a loop's size-dependent bias Z(n) = Z + [sqrt(b/(8 pi a0)) Z_loop - Z]
+ * n^(-alpha/2) equal to the constant Z at every size: sqrt(b/(8 pi a0)) Z_loop = Z, so Z_loop = Z /
+ * sqrt(b/(8 pi a0)). (About Z/0.152 for b = a0/sqrt(3).) The loop's Burgers vector is its own
+ * burgers_vector, or a0/sqrt(3) when that is left at zero, as in the kernels.
+ */
+Real
+constantBiasZLoop(Real z, Real burgers_vector_param, Real lattice_parameter)
+{
+  const Real b =
+      burgers_vector_param != 0.0 ? burgers_vector_param : lattice_parameter / std::sqrt(3.0);
+  return z / std::sqrt(b / (8.0 * libMesh::pi * lattice_parameter));
+}
 } // namespace
 
 registerMooseAction("BlackBearApp", DefectDynamicsAction, "add_variable");
@@ -471,7 +485,10 @@ DefectDynamicsAction::actAddNodalKernels()
       const MooseEnum bias = sp->getParam<MooseEnum>("bias");
       const Real Z = sp->getParam<Real>("Z");
       params.set<Real>("z_i") = Z;
-      params.set<Real>("z_loop_i") = bias == "constant" ? Z : sp->getParam<Real>("Z_loop");
+      params.set<Real>("z_loop_i") =
+          bias == "constant"
+              ? constantBiasZLoop(Z, sp->getParam<Real>("burgers_vector"), lattice_parameter)
+              : sp->getParam<Real>("Z_loop");
       params.set<Real>("alpha_loop_i") = sp->getParam<Real>("alpha");
       params.set<Real>("burgers_vector") = sp->getParam<Real>("burgers_vector");
     }
@@ -507,7 +524,9 @@ DefectDynamicsAction::actAddNodalKernels()
         params.set<Real>("opposite_z_v") = sp->getParam<Real>("Z");
         params.set<Real>("opposite_z_loop_v") =
             opposite->getParam<MooseEnum>("bias") == "constant"
-                ? sp->getParam<Real>("Z")
+                ? constantBiasZLoop(sp->getParam<Real>("Z"),
+                                    opposite->getParam<Real>("burgers_vector"),
+                                    lattice_parameter)
                 : opposite->getParam<Real>("Z_loop_opposite");
         params.set<Real>("opposite_alpha_loop_v") = opposite->getParam<Real>("alpha_opposite");
         params.set<Real>("opposite_burgers_vector") = opposite->getParam<Real>("burgers_vector");
@@ -520,7 +539,9 @@ DefectDynamicsAction::actAddNodalKernels()
         // loop's own Z_loop_opposite/alpha_opposite are the coefficient/exponent.
         params.set<Real>("z_v") = opposite->getParam<Real>("Z");
         params.set<Real>("z_loop_v") = sp->getParam<MooseEnum>("bias") == "constant"
-                                           ? opposite->getParam<Real>("Z")
+                                           ? constantBiasZLoop(opposite->getParam<Real>("Z"),
+                                                               sp->getParam<Real>("burgers_vector"),
+                                                               lattice_parameter)
                                            : sp->getParam<Real>("Z_loop_opposite");
         params.set<Real>("alpha_loop_v") = sp->getParam<Real>("alpha_opposite");
 
@@ -539,7 +560,7 @@ DefectDynamicsAction::actAddNodalKernels()
           params.set<Real>("opposite_z_i") = sp->getParam<Real>("Z");
           params.set<Real>("opposite_z_loop_i") =
               opposite->getParam<MooseEnum>("bias") == "constant"
-                  ? sp->getParam<Real>("Z")
+                  ? constantBiasZLoop(sp->getParam<Real>("Z"), opposite_burgers, lattice_parameter)
                   : opposite->getParam<Real>("Z_loop_opposite");
           params.set<Real>("opposite_alpha_loop_i") = opposite->getParam<Real>("alpha_opposite");
         }

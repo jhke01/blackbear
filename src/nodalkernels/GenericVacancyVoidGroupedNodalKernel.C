@@ -95,16 +95,18 @@ GenericVacancyVoidGroupedNodalKernelTempl<is_ad>::validParams()
       "lattice_parameter/sqrt(3) when left at zero, matching "
       "InterstitialLoopGroupedNodalKernel's own default.");
   params.addParam<Real>(
-      "opposite_z_v", 1.0, "Baseline dislocation bias Z_v for small loops absorbing vacancies.");
+      "opposite_z_v",
+      1.0,
+      "Large-loop limit Z_v of the bias for loops absorbing vacancies (n -> infinity).");
   params.addParam<Real>(
       "opposite_z_loop_v",
       1.0,
-      "Large-loop dislocation bias Z_loop_v approached as n -> infinity, for loops absorbing "
-      "vacancies.");
+      "Small-loop coefficient Z_loop_v for loops absorbing vacancies: the bias at n = 1 is "
+      "sqrt(b/(8 pi a0)) * Z_loop_v.");
   params.addParam<Real>(
       "opposite_alpha_loop_v",
       1.0,
-      "Exponent controlling how fast the loop vacancy-absorption bias approaches Z_loop_v with "
+      "Exponent controlling how fast the loop vacancy-absorption bias approaches Z_v with "
       "size.");
   return params;
 }

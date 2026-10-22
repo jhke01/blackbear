@@ -150,7 +150,7 @@ switches, each defaulting to "off").
 |---|---|---|---|
 | Capillary formation-energy law | [!param](/DefectDynamics/DefectSpeciesAction/Ef) + [!param](/DefectDynamics/DefectSpeciesAction/Eb2) (default; derives $A$, $C$) | [!param](/DefectDynamics/DefectSpeciesAction/capillary_coefficient_eV) + [!param](/DefectDynamics/DefectSpeciesAction/capillary_constant_eV) ($A$, $C$ given directly) | per species |
 | Maximum cluster size | [!param](/DefectDynamics/DefectSpeciesAction/num_cluster_sizes) (a point-defect count, given directly) | [!param](/DefectDynamics/DefectSpeciesAction/max_cluster_radius_m) (a physical radius in meters; converted internally) | per species |
-| Dislocation bias (loop only) | [!param](/DefectDynamics/DefectSpeciesAction/bias) `= size_dependent` (default; uses `Z`, `Z_loop`, `alpha`) | `bias = constant` (uses `Z` only, equivalent to `Z_loop = Z`) | per species |
+| Dislocation bias (loop only) | [!param](/DefectDynamics/DefectSpeciesAction/bias) `= size_dependent` (default; uses `Z`, `Z_loop`, `alpha`) | `bias = constant` (uses `Z` only; the action sets `Z_loop = Z / sqrt(b/(8 pi a0))` so the bias equals `Z` at every size) | per species |
 | Emission binding energy | [!param](/DefectDynamics/DefectSpeciesAction/binding_energy_model) `= capillary` (default; always uses the law above) | `= binding_energy_table` or `= formation_energy_table` (direct DFT/MD data for small $n$, falling back to the capillary law beyond the table) | per species |
 
 Independent on/off switches (not mutually exclusive with anything, each off by default):

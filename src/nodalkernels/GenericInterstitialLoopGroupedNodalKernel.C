@@ -51,11 +51,14 @@ GenericInterstitialLoopGroupedNodalKernelTempl<is_ad>::validParams()
                         0.0,
                         "Burgers vector b [m] for the loop radius and bias factor. Defaults to "
                         "lattice_parameter/sqrt(3) when left at zero.");
-  params.addParam<Real>("z_i", 1.0, "Baseline dislocation bias Z_i for small loops.");
   params.addParam<Real>(
-      "z_loop_i", 1.0, "Large-loop dislocation bias Z_loop_i approached as n -> infinity.");
+      "z_i", 1.0, "Large-loop limit Z_i of the dislocation bias, approached as n -> infinity.");
   params.addParam<Real>(
-      "alpha_loop_i", 1.0, "Exponent controlling how fast Z_i(n) approaches Z_loop_i with size.");
+      "z_loop_i",
+      1.0,
+      "Small-loop coefficient Z_loop_i: the bias at n = 1 is sqrt(b/(8 pi a0)) * Z_loop_i.");
+  params.addParam<Real>(
+      "alpha_loop_i", 1.0, "Exponent controlling how fast Z_i(n) approaches Z_i with size.");
   params.addParam<Real>(
       "formation_energy_eV", 0.0, "Interstitial monomer formation energy E_form_i [eV].");
   params.addParam<Real>(
@@ -96,16 +99,18 @@ GenericInterstitialLoopGroupedNodalKernelTempl<is_ad>::validParams()
   params.addParam<Real>(
       "Em_v_eV", 0.0, "Vacancy migration energy Em_v [eV] (opposite species).");
   params.addParam<Real>(
-      "z_v", 1.0, "Baseline dislocation bias Z_v for small loops absorbing vacancies.");
+      "z_v",
+      1.0,
+      "Large-loop limit Z_v of the bias for loops absorbing vacancies (n -> infinity).");
   params.addParam<Real>(
       "z_loop_v",
       1.0,
-      "Large-loop dislocation bias Z_loop_v approached as n -> infinity, for loops absorbing "
-      "vacancies.");
+      "Small-loop coefficient Z_loop_v for loops absorbing vacancies: the bias at n = 1 is "
+      "sqrt(b/(8 pi a0)) * Z_loop_v.");
   params.addParam<Real>(
       "alpha_loop_v",
       1.0,
-      "Exponent controlling how fast the loop vacancy-absorption bias approaches Z_loop_v with "
+      "Exponent controlling how fast the loop vacancy-absorption bias approaches Z_v with "
       "size.");
 
   MooseEnum opposite_geometry("void loop", "void");
@@ -129,13 +134,15 @@ GenericInterstitialLoopGroupedNodalKernelTempl<is_ad>::validParams()
                         "kernel's monomer (opposite_geometry = loop only; required to be set).");
   params.addParam<Real>("opposite_z_loop_i",
                         1.0,
-                        "Large-loop bias Z_loop of the opposite family's loops for capturing this "
-                        "kernel's monomer (opposite_geometry = loop only; required to be set).");
+                        "Small-loop coefficient Z_loop of the opposite family's loops for "
+                        "capturing this kernel's monomer: their bias at n = 1 is "
+                        "sqrt(b/(8 pi a0)) * Z_loop (opposite_geometry = loop only; required to be "
+                        "set).");
   params.addParam<Real>("opposite_alpha_loop_i",
                         1.0,
                         "Exponent controlling how fast the opposite family's loop bias approaches "
-                        "its large-loop value with size (opposite_geometry = loop only; required "
-                        "to be set).");
+                        "opposite_z_i with size (opposite_geometry = loop only; required to be "
+                        "set).");
   return params;
 }
 
@@ -250,7 +257,8 @@ template <bool is_ad>
 Real
 GenericInterstitialLoopGroupedNodalKernelTempl<is_ad>::loopBias(unsigned int n) const
 {
-  // Z_i(n) interpolates from the small-loop bias z_i to the large-loop bias z_loop_i as n grows,
+  // Z_i(n) interpolates from sqrt(b/(8 pi a0)) * z_loop_i at n = 1 to the large-loop bias z_i as n
+  // grows,
   // following the dislocation-loop capture-efficiency model of Wiedersich/Jourdan-style AMSS
   // rate theory (DD_AMSS_Z_I, DD_AMSS_Z_LOOP_I, DD_AMSS_ALPHA_LOOP_I in the reference model).
   Real z = std::sqrt(_burgers_vector / (8.0 * libMesh::pi * _lattice_parameter)) * _z_loop_i - _z_i;
