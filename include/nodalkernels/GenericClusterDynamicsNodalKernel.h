@@ -152,6 +152,10 @@ protected:
   /// Radiation-enhanced multiplier applied to the monomer diffusivity
   const Real _radiation_enhanced_factor;
 
+  /// radiation_enhanced_factor times the base diffusivity: every input is a constant parameter, so
+  /// this is evaluated once in the constructor instead of on every beta()/alpha() call.
+  const Real _static_diffusivity;
+
   /// Optional DefectDynamics vacancy grouped array variable: when coupled, the monomer
   /// diffusivity is additionally scaled by the dynamic vacancy supersaturation ratio
   /// C_v(1,t)/_vacancy_c_thermal. Component 0 of this array is always the vacancy monomer,

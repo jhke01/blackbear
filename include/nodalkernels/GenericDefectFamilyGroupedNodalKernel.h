@@ -535,7 +535,7 @@ GenericDefectFamilyGroupedNodalKernel<Derived, is_ad>::computeQpJacobian()
 
     // Accumulate one Jacobian row at a time, visiting only the columns it touches
     std::vector<Real> row_values(n_comp, 0.0);
-    std::vector<bool> row_touched(n_comp, false);
+    std::vector<unsigned char> row_touched(n_comp, 0);
     std::vector<unsigned int> row_columns;
     auto addEntry = [&](unsigned int column, Real value)
     {
@@ -548,11 +548,12 @@ GenericDefectFamilyGroupedNodalKernel<Derived, is_ad>::computeQpJacobian()
     };
     auto addConcentrationDerivative = [&](unsigned int n, Real value)
     {
-      if (_layout.isExplicitSize(n))
-        addEntry(_layout.explicitComponent(n), value);
+      // n is always within 1..N here (callers guard n == 0 and n >= N)
+      if (_layout.isExplicitSizeInRange(n))
+        addEntry(_layout.explicitComponentInRange(n), value);
       else
       {
-        const auto & bin = _layout.groupForSize(n);
+        const auto & bin = _layout.groupForSizeInRange(n);
         addEntry(bin.l0_component, value * a0[n]);
         addEntry(bin.l1_component, value * a1[n]);
       }
@@ -693,7 +694,7 @@ GenericDefectFamilyGroupedNodalKernel<Derived, is_ad>::computeQpOffDiagJacobian(
     }
 
     std::vector<Real> row_values(opposite_n_comp, 0.0);
-    std::vector<bool> row_touched(opposite_n_comp, false);
+    std::vector<unsigned char> row_touched(opposite_n_comp, 0);
     std::vector<unsigned int> row_columns;
     auto addEntry = [&](unsigned int column, Real value)
     {
@@ -714,11 +715,12 @@ GenericDefectFamilyGroupedNodalKernel<Derived, is_ad>::computeQpOffDiagJacobian(
     };
     auto addOppositeConcentrationDerivative = [&](unsigned int n, Real value)
     {
-      if (_opposite_layout.isExplicitSize(n))
-        addEntry(_opposite_layout.explicitComponent(n), value);
+      // n runs over 2..N_opposite here
+      if (_opposite_layout.isExplicitSizeInRange(n))
+        addEntry(_opposite_layout.explicitComponentInRange(n), value);
       else
       {
-        const auto & bin = _opposite_layout.groupForSize(n);
+        const auto & bin = _opposite_layout.groupForSizeInRange(n);
         addEntry(bin.l0_component, value * opposite_a0[n]);
         addEntry(bin.l1_component, value * opposite_a1[n]);
       }

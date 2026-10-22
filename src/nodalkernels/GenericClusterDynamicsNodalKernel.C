@@ -183,6 +183,7 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::GenericClusterDynamicsNodalKernel
     _D0(this->template getParam<Real>("D0")),
     _Q(this->template getParam<Real>("Q_eV") * eV),
     _radiation_enhanced_factor(this->template getParam<Real>("radiation_enhanced_factor")),
+    _static_diffusivity(_radiation_enhanced_factor * baseDiffusivity()),
     _vacancy_array(this->coupledArrayValue("vacancy_coupled_var")),
     _vacancy_coupling_active(this->isCoupled("vacancy_coupled_var")),
     _vacancy_var_num(this->coupled("vacancy_coupled_var")),
@@ -377,7 +378,7 @@ template <bool is_ad>
 Real
 GenericClusterDynamicsNodalKernelTempl<is_ad>::monomerDiffusivity() const
 {
-  Real diffusivity = _radiation_enhanced_factor * baseDiffusivity();
+  Real diffusivity = _static_diffusivity;
   if (_vacancy_coupling_active)
     diffusivity *= _vacancy_array[_qp](0) / _vacancy_c_thermal;
   return diffusivity;
@@ -389,7 +390,7 @@ GenericClusterDynamicsNodalKernelTempl<is_ad>::monomerDiffusivityCouplingDerivat
 {
   if (!_vacancy_coupling_active)
     return 0.0;
-  return _radiation_enhanced_factor * baseDiffusivity() / _vacancy_c_thermal;
+  return _static_diffusivity / _vacancy_c_thermal;
 }
 
 template <bool is_ad>

@@ -15,6 +15,7 @@
 #pragma once
 
 #include "Moose.h"
+#include "MooseError.h"
 #include "metaphysicl/raw_type.h"
 
 #include <type_traits>
@@ -94,6 +95,28 @@ public:
   const ClusterGroupingBin & group(unsigned int group_index) const;
   const ClusterGroupingBin & groupForSize(unsigned int n) const;
   const std::vector<ClusterGroupingBin> & groups() const { return _groups; }
+
+  /**
+   * Inline lookups without the range and kind checks of isExplicitSize(), explicitComponent() and
+   * groupForSize(), for hot loops whose size n is already known to satisfy 1 <= n <= N. The
+   * checks remain as assertions in debug builds. The checked versions above are the right choice
+   * everywhere else.
+   */
+  bool isExplicitSizeInRange(unsigned int n) const
+  {
+    mooseAssert(containsSize(n), "Cluster size out of range.");
+    return n == 1 || n <= _explicit_max;
+  }
+  unsigned int explicitComponentInRange(unsigned int n) const
+  {
+    mooseAssert(isExplicitSize(n), "Cluster size is not explicit.");
+    return n == 1 ? 0 : _explicit_component[n];
+  }
+  const ClusterGroupingBin & groupForSizeInRange(unsigned int n) const
+  {
+    mooseAssert(isGroupedSize(n), "Cluster size is not grouped.");
+    return _groups[_group_of_size[n]];
+  }
 
   /**
    * Coefficients of the in-bin reconstruction C_n = a0 * L0 + a1 * L1 for grouped size n.

@@ -46,4 +46,9 @@ protected:
   VectorPostprocessorValue & _n;
   VectorPostprocessorValue & _concentration;
   VectorPostprocessorValue & _radius;
+
+  /// Cluster sizes 1..N and radii r1*n^radius_exponent: they depend only on input parameters, so
+  /// they are computed once (in the constructor) and copied into the output vectors each time.
+  std::vector<Real> _n_table;
+  std::vector<Real> _radius_table;
 };

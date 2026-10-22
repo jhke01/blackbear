@@ -140,6 +140,12 @@ ClusterTotalContentGrouped::execute()
     if (bin.end < _n_minimum)
       continue;
 
+    // With enforce_group_nonnegative and L0 <= 0 the layout reconstructs every size in the bin as
+    // exactly zero (reconstructionCoefficients() returns a0 = a1 = 0), so the bin adds only +-0 to
+    // the sums. Skipping it avoids a per-size loop over the empty tail on every step.
+    if (_enforce_group_nonnegative && _clusters[_qp](bin.l0_component) <= 0.0)
+      continue;
+
     // For a complete, unclipped bin, sum_n n*C_n = L0*width*mean_x + L1*width*sigma2: the L1 term
     // reduces to width*sigma2 because sum_n (n-mean_x)*n = sum_n (n-mean_x)^2 (the mean_x*sum_n
     // (n-mean_x) cross term vanishes by definition of mean_x).

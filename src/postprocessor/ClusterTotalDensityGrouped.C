@@ -139,6 +139,12 @@ ClusterTotalDensityGrouped::execute()
     if (bin.end < _n_minimum)
       continue;
 
+    // With enforce_group_nonnegative and L0 <= 0 the layout reconstructs every size in the bin as
+    // exactly zero (reconstructionCoefficients() returns a0 = a1 = 0), so the bin adds only +-0 to
+    // the sums. Skipping it avoids a per-size loop over the empty tail on every step.
+    if (_enforce_group_nonnegative && _clusters[_qp](bin.l0_component) <= 0.0)
+      continue;
+
     if (bin.start >= _n_minimum && groupedBinNonnegative(bin))
     {
       node_total += _clusters[_qp](bin.l0_component) * bin.width;

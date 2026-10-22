@@ -78,6 +78,15 @@ ClusterSizeDistributionGrouped::ClusterSizeDistributionGrouped(const InputParame
     _concentration(declareVector("concentration")),
     _radius(declareVector("radius"))
 {
+  const unsigned int num_cluster_sizes = _layout.numClusterSizes();
+  _n_table.resize(num_cluster_sizes);
+  _radius_table.resize(num_cluster_sizes);
+  for (unsigned int n = 1; n <= num_cluster_sizes; ++n)
+  {
+    _n_table[n - 1] = n;
+    _radius_table[n - 1] = _r1 * std::pow(static_cast<Real>(n), _radius_exponent);
+  }
+
   if (_group_nonnegative_tolerance_factor < 0.0)
     mooseError(
         "ClusterSizeDistributionGrouped requires group_nonnegative_tolerance_factor >= 0.");
@@ -109,11 +118,11 @@ ClusterSizeDistributionGrouped::execute()
   for (unsigned int n = 1; n <= _layout.numClusterSizes(); ++n)
   {
     const unsigned int i = n - 1;
-    _n[i] = n;
     _concentration[i] = _layout.concentration(
         _clusters[_qp], n, _enforce_group_nonnegative, _group_nonnegative_tolerance_factor);
-    _radius[i] = _r1 * std::pow(static_cast<Real>(n), _radius_exponent);
   }
+  _n = _n_table;
+  _radius = _radius_table;
 }
 
 void

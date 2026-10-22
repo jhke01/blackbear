@@ -208,6 +208,7 @@ GenericClusterDynamicsGroupedNodalKernelTempl<is_ad>::GenericClusterDynamicsGrou
     _D0(this->template getParam<Real>("D0")),
     _Q(this->template getParam<Real>("Q_eV") * grouped_eV),
     _radiation_enhanced_factor(this->template getParam<Real>("radiation_enhanced_factor")),
+    _static_diffusivity(_radiation_enhanced_factor * baseDiffusivity()),
     _vacancy_array(this->coupledArrayValue("vacancy_coupled_var")),
     _vacancy_coupling_active(this->isCoupled("vacancy_coupled_var")),
     _vacancy_var_num(this->coupled("vacancy_coupled_var")),
@@ -427,7 +428,7 @@ template <bool is_ad>
 Real
 GenericClusterDynamicsGroupedNodalKernelTempl<is_ad>::monomerDiffusivity() const
 {
-  Real diffusivity = _radiation_enhanced_factor * baseDiffusivity();
+  Real diffusivity = _static_diffusivity;
   if (_vacancy_coupling_active)
     diffusivity *= _vacancy_array[_qp](0) / _vacancy_c_thermal;
   return diffusivity;
@@ -439,7 +440,7 @@ GenericClusterDynamicsGroupedNodalKernelTempl<is_ad>::monomerDiffusivityCoupling
 {
   if (!_vacancy_coupling_active)
     return 0.0;
-  return _radiation_enhanced_factor * baseDiffusivity() / _vacancy_c_thermal;
+  return _static_diffusivity / _vacancy_c_thermal;
 }
 
 template <bool is_ad>
@@ -724,7 +725,7 @@ GenericClusterDynamicsGroupedNodalKernelTempl<false>::computeQpJacobian()
 
   // Accumulate one Jacobian row at a time, visiting only the columns it touches
   std::vector<Real> row_values(n_comp, 0.0);
-  std::vector<bool> row_touched(n_comp, false);
+  std::vector<unsigned char> row_touched(n_comp, 0);
   std::vector<unsigned int> row_columns;
   auto addEntry = [&](unsigned int column, Real value)
   {
@@ -737,11 +738,12 @@ GenericClusterDynamicsGroupedNodalKernelTempl<false>::computeQpJacobian()
   };
   auto addConcentrationDerivative = [&](unsigned int n, Real value)
   {
-    if (_layout.isExplicitSize(n))
-      addEntry(_layout.explicitComponent(n), value);
+    // n is always within 1..N here (addFluxDerivative guards n == 0 and n >= N)
+    if (_layout.isExplicitSizeInRange(n))
+      addEntry(_layout.explicitComponentInRange(n), value);
     else
     {
-      const auto & bin = _layout.groupForSize(n);
+      const auto & bin = _layout.groupForSizeInRange(n);
       addEntry(bin.l0_component, value * a0[n]);
       addEntry(bin.l1_component, value * a1[n]);
     }
