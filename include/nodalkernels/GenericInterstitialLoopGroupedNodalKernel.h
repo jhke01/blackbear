@@ -91,13 +91,21 @@ public:
   /// vacancy-side bias parameters (DD_AMSS_Z_V/Z_LOOP_V/ALPHA_LOOP_V in the reference).
   Real biasVacancy(unsigned int n) const;
 
-  /// Opposite (vacancy void) radius, matching VacancyVoidGroupedNodalKernel::radius().
+  /// Radius of a partner cluster of size n, for the partner geometry selected by
+  /// opposite_geometry: a void (spherical, the default) or a two-dimensional loop.
   Real oppositeRadius(unsigned int n) const;
-  /// beta_opposite for the vacancy-void family: the rate coefficient at which a void of size n
-  /// absorbs an interstitial monomer, shrinking to size n-1. Uses this kernel's own D_i (no new
-  /// diffusivity parameter needed: the void's finite-sink-strength coefficient needs D_i, which
-  /// this kernel already computes for its own self-absorption). Needed to sum the vacancy monomer
-  /// loss (Piece B) over the coupled void array.
+  /// Bias factor of a partner LOOP of size n for capturing this kernel's own monomer, same
+  /// functional form as loopBias() but with the partner's parameters (opposite_z_i,
+  /// opposite_z_loop_i, opposite_alpha_loop_i, opposite_burgers_vector). Only used when
+  /// opposite_geometry = loop.
+  Real oppositeLoopBias(unsigned int n) const;
+  /// beta_opposite for the partner family: the rate coefficient at which a partner cluster of
+  /// size n absorbs this kernel's monomer, shrinking to size n-1. This must be the SAME coefficient
+  /// the partner kernel uses for its own Piece A, because one absorption event removes one monomer
+  /// here and one atom there. For a void partner: 4*pi*r*D/((1 + a0/r)*V_at). For a loop partner:
+  /// 2*pi*r_loop*Z(n)*D/V_at. Uses this kernel's own D (the partner's monomer-capture involves
+  /// this kernel's species' diffusivity). Needed to sum the monomer loss (Piece B) over the coupled
+  /// array.
   Real oppositeBetaOpposite(unsigned int n) const;
   void ensureOppositeCoefficientCache() const;
 
@@ -133,6 +141,17 @@ protected:
   const Real _z_v;
   const Real _z_loop_v;
   const Real _alpha_loop_v;
+
+  /// Geometry of the coupled partner family. A void partner (default) uses the void radius law and
+  /// finite-sink-strength absorption; a loop partner (e.g. a vacancy modeled as a two-dimensional
+  /// loop, as in Pokor et al. 2004) uses the loop radius law and size-dependent bias below.
+  const bool _opposite_is_loop;
+  /// Partner loop's Burgers vector (defaults to this kernel's own when left at zero).
+  const Real _opposite_burgers_vector;
+  /// Bias of the partner's loops for capturing THIS kernel's monomer (loop partner only).
+  const Real _opposite_z_i;
+  const Real _opposite_z_loop_i;
+  const Real _opposite_alpha_loop_i;
 
   usingGenericDefectFamilyGroupedNodalKernelMembers(
       GenericInterstitialLoopGroupedNodalKernelTempl<is_ad>, is_ad);

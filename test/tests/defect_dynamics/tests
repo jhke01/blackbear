@@ -144,6 +144,22 @@
     requirement = 'BlackBear shall provide an analytical on- and off-diagonal Jacobian for the opposite-species absorption terms coupling the VacancyVoidGroupedNodalKernel and InterstitialLoopGroupedNodalKernel.'
   []
 
+  [defect_dynamics_two_loop_conservation]
+    type = CSVDiff
+    input = defect_dynamics_two_loop_conservation.i
+    csvdiff = 'defect_dynamics_two_loop_conservation_out.csv'
+    design = 'GenericInterstitialLoopGroupedNodalKernel.md'
+    requirement = 'BlackBear shall conserve defects when both species are two-dimensional loops, so that with no generation, sinks or recombination the difference between the total vacancy and interstitial content stays constant, by summing the opposite loop family absorption with the loop absorption coefficient when opposite_geometry is loop.'
+  []
+  [defect_dynamics_two_loop_jacobian]
+    type = PetscJacobianTester
+    input = defect_dynamics_two_loop_jacobian.i
+    run_sim = True
+    ratio_tol = 1e-7
+    design = 'GenericInterstitialLoopGroupedNodalKernel.md'
+    requirement = 'BlackBear shall provide an analytical on- and off-diagonal Jacobian for the opposite-species absorption terms between two InterstitialLoopGroupedNodalKernel instances with opposite_geometry set to loop.'
+  []
+
   [vacancy_void_energy_capillary]
     type = CSVDiff
     input = vacancy_void_energy_models.i

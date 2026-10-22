@@ -107,6 +107,35 @@ GenericInterstitialLoopGroupedNodalKernelTempl<is_ad>::validParams()
       1.0,
       "Exponent controlling how fast the loop vacancy-absorption bias approaches Z_loop_v with "
       "size.");
+
+  MooseEnum opposite_geometry("void loop", "void");
+  params.addParam<MooseEnum>(
+      "opposite_geometry",
+      opposite_geometry,
+      "Geometry of the coupled opposite family (opposite_coupled_var): 'void' (default, a "
+      "three-dimensional cluster with the finite-sink-strength absorption coefficient) or 'loop' "
+      "(a two-dimensional cluster, e.g. a vacancy modeled as a loop following Pokor et al. 2004). "
+      "This selects how the opposite family's absorption of THIS kernel's monomer is summed for "
+      "the monomer-pool loss (Piece B), and must match how the opposite kernel computes its own "
+      "absorption (Piece A).");
+  params.addParam<Real>("opposite_burgers_vector",
+                        0.0,
+                        "Burgers vector b [m] of the opposite family's loops "
+                        "(opposite_geometry = loop only). Defaults to this kernel's own "
+                        "burgers_vector when left at zero.");
+  params.addParam<Real>("opposite_z_i",
+                        1.0,
+                        "Baseline bias Z of the opposite family's small loops for capturing this "
+                        "kernel's monomer (opposite_geometry = loop only; required to be set).");
+  params.addParam<Real>("opposite_z_loop_i",
+                        1.0,
+                        "Large-loop bias Z_loop of the opposite family's loops for capturing this "
+                        "kernel's monomer (opposite_geometry = loop only; required to be set).");
+  params.addParam<Real>("opposite_alpha_loop_i",
+                        1.0,
+                        "Exponent controlling how fast the opposite family's loop bias approaches "
+                        "its large-loop value with size (opposite_geometry = loop only; required "
+                        "to be set).");
   return params;
 }
 
@@ -132,15 +161,21 @@ GenericInterstitialLoopGroupedNodalKernelTempl<
     _energy_constant_eV(this->template getParam<Real>("loop_energy_constant_eV")),
     _binding_energy_model(this->template getParam<MooseEnum>("binding_energy_model")
                               .template getEnum<BindingEnergyModel>()),
-    _binding_energy_table_eV(
-        this->template getParam<std::vector<Real>>("binding_energy_table_eV")),
+    _binding_energy_table_eV(this->template getParam<std::vector<Real>>("binding_energy_table_eV")),
     _formation_energy_table_eV(
         this->template getParam<std::vector<Real>>("formation_energy_table_eV")),
     _opposite_D0(this->template getParam<Real>("D0_v")),
     _opposite_Q(this->template getParam<Real>("Em_v_eV") * loop_eV),
     _z_v(this->template getParam<Real>("z_v")),
     _z_loop_v(this->template getParam<Real>("z_loop_v")),
-    _alpha_loop_v(this->template getParam<Real>("alpha_loop_v"))
+    _alpha_loop_v(this->template getParam<Real>("alpha_loop_v")),
+    _opposite_is_loop(this->template getParam<MooseEnum>("opposite_geometry") == "loop"),
+    _opposite_burgers_vector(this->template getParam<Real>("opposite_burgers_vector") != 0.0
+                                 ? this->template getParam<Real>("opposite_burgers_vector")
+                                 : _burgers_vector),
+    _opposite_z_i(this->template getParam<Real>("opposite_z_i")),
+    _opposite_z_loop_i(this->template getParam<Real>("opposite_z_loop_i")),
+    _opposite_alpha_loop_i(this->template getParam<Real>("opposite_alpha_loop_i"))
 {
   if (_temperature <= 0.0)
     mooseError(this->type(), " requires temperature > 0.");
@@ -177,6 +212,23 @@ GenericInterstitialLoopGroupedNodalKernelTempl<
     if (_opposite_Q <= 0.0)
       mooseError(this->type(), " requires Em_v_eV > 0 when opposite_coupled_var is provided.");
   }
+  if (_opposite_is_loop && _opposite_coupling_active)
+  {
+    // A loop partner's bias is the partner kernel's own Piece A bias for capturing this kernel's
+    // monomer, so there is no sensible default: silently using 1.0 would give a wrong coefficient.
+    for (const auto & name : {"opposite_z_i", "opposite_z_loop_i", "opposite_alpha_loop_i"})
+      if (!this->parameters().isParamSetByUser(name))
+        this->paramError(name,
+                         "must be set when opposite_geometry = loop: it is the opposite loop "
+                         "family's bias for capturing this kernel's monomer.");
+  }
+  if (!_opposite_is_loop && (this->parameters().isParamSetByUser("opposite_z_i") ||
+                             this->parameters().isParamSetByUser("opposite_z_loop_i") ||
+                             this->parameters().isParamSetByUser("opposite_alpha_loop_i") ||
+                             this->parameters().isParamSetByUser("opposite_burgers_vector")))
+    this->paramWarning("opposite_geometry",
+                       "opposite_z_i, opposite_z_loop_i, opposite_alpha_loop_i and "
+                       "opposite_burgers_vector have no effect unless opposite_geometry = loop.");
 }
 
 template <bool is_ad>
@@ -290,7 +342,24 @@ template <bool is_ad>
 Real
 GenericInterstitialLoopGroupedNodalKernelTempl<is_ad>::oppositeRadius(unsigned int n) const
 {
+  if (_opposite_is_loop)
+    return std::sqrt(static_cast<Real>(n) * _atomic_volume /
+                     (libMesh::pi * _opposite_burgers_vector));
   return std::cbrt(3.0 * static_cast<Real>(n) * _atomic_volume / (4.0 * libMesh::pi));
+}
+
+template <bool is_ad>
+Real
+GenericInterstitialLoopGroupedNodalKernelTempl<is_ad>::oppositeLoopBias(unsigned int n) const
+{
+  // Same functional form as loopBias(), with the partner's Burgers vector and bias parameters: this
+  // is what the partner kernel evaluates as its own biasVacancy() when it absorbs this kernel's
+  // monomer, so the two sides of one absorption event use one coefficient.
+  Real z = std::sqrt(_opposite_burgers_vector / (8.0 * libMesh::pi * _lattice_parameter)) *
+               _opposite_z_loop_i -
+           _opposite_z_i;
+  z *= std::pow(1.0 / static_cast<Real>(n), 0.5 * _opposite_alpha_loop_i);
+  return z + _opposite_z_i;
 }
 
 template <bool is_ad>
@@ -301,6 +370,8 @@ GenericInterstitialLoopGroupedNodalKernelTempl<is_ad>::oppositeBetaOpposite(unsi
     return _opposite_beta_opposite_cache[n];
 
   const Real r = oppositeRadius(n);
+  if (_opposite_is_loop)
+    return 2.0 * libMesh::pi * r * oppositeLoopBias(n) * monomerDiffusivity() / _atomic_volume;
   return 4.0 * libMesh::pi * r * monomerDiffusivity() /
          ((1.0 + _lattice_parameter / r) * _atomic_volume);
 }
@@ -318,7 +389,10 @@ GenericInterstitialLoopGroupedNodalKernelTempl<is_ad>::ensureOppositeCoefficient
   {
     const Real r = oppositeRadius(n);
     beta_opposite_values[n] =
-        4.0 * libMesh::pi * r * diffusivity / ((1.0 + _lattice_parameter / r) * _atomic_volume);
+        _opposite_is_loop
+            ? 2.0 * libMesh::pi * r * oppositeLoopBias(n) * diffusivity / _atomic_volume
+            : 4.0 * libMesh::pi * r * diffusivity /
+                  ((1.0 + _lattice_parameter / r) * _atomic_volume);
   }
 
   _opposite_beta_opposite_cache = std::move(beta_opposite_values);

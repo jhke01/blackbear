@@ -137,18 +137,38 @@ the monomer equation additionally gains a $+\beta^{opp}_2 C_{v,1} C_2$ term (one
 unit returned to the monomer pool, not doubled the way self-dimerization is).
 
 The corresponding loss from the vacancy monomer pool is computed by summing
-the *entire* coupled void array using the void family's own
-finite-sink-strength absorption-of-interstitial coefficient (the same form as
-[GenericVacancyVoidGroupedNodalKernel.md]'s own $\beta_n$, but with $D_i$),
-using this kernel's own $D_i$ (no new diffusivity parameter needed, since
-this kernel already computes $D_i$ for its self-absorption terms).
+the *entire* coupled array. Each term uses the coefficient at which the coupled family's own
+clusters absorb this kernel's monomer, with this kernel's own $D_i$ (no new diffusivity parameter
+is needed, since this kernel already computes $D_i$ for its self-absorption terms). Which
+coefficient that is depends on the coupled family's geometry,
+[!param](/NodalKernels/InterstitialLoopGroupedNodalKernel/opposite_geometry):
+
+- `void` (the default): the void family's finite-sink-strength coefficient, the same form as
+  [GenericVacancyVoidGroupedNodalKernel.md]'s own $\beta_n$ but with $D_i$.
+- `loop`: the loop coefficient $2\pi r_n Z(n) D_i / V_{at}$, with the coupled loops' radius law
+  (their Burgers vector,
+  [!param](/NodalKernels/InterstitialLoopGroupedNodalKernel/opposite_burgers_vector), defaulting to
+  this kernel's own) and their bias for capturing this kernel's monomer,
+  [!param](/NodalKernels/InterstitialLoopGroupedNodalKernel/opposite_z_i),
+  [!param](/NodalKernels/InterstitialLoopGroupedNodalKernel/opposite_z_loop_i), and
+  [!param](/NodalKernels/InterstitialLoopGroupedNodalKernel/opposite_alpha_loop_i). Use this when
+  both species are loops, e.g. a vacancy modeled as a loop following Pokor et al. (2004).
+
+This loss and the shrinkage of the coupled family's clusters are the two sides of one absorption
+event, so they must use one rate. With the wrong geometry the monomer pool is drained at a
+different rate from the one at which the clusters shrink, and defects are no longer conserved.
+For two loop families with no generation, sinks or recombination, the total vacancy content minus
+the total interstitial content stays constant; see
+!listing test/tests/defect_dynamics/defect_dynamics_two_loop_conservation.i
+and its Jacobian check
+!listing test/tests/defect_dynamics/defect_dynamics_two_loop_jacobian.i
 Reconstructing the coupled void array requires its own grouping layout,
 described independently of this kernel's own layout by the
 `opposite_num_cluster_sizes`/`opposite_use_grouping`/`opposite_explicit_max`/
 `opposite_group_spacing`/`opposite_group_linear_width`/
 `opposite_group_geometric_ratio`/`opposite_enforce_group_nonnegative`/
 `opposite_group_nonnegative_tolerance_factor` parameters, which must match the
-coupled [GenericVacancyVoidGroupedNodalKernel.md] instance's own grouping
+coupled kernel instance's own grouping
 settings.
 
 When `opposite_coupled_var` is not provided, every opposite-absorption term

@@ -41,7 +41,11 @@ independent switches: either can be on without the other.
 The two species sub-blocks' `geometry` need not differ: `geometry = loop` for both is supported
 (e.g. modeling a vacancy species as a loop instead of a void, following Pokor et al. 2004's own
 Eqs 4a-4f, which use the same two-dimensional dislocation-bias absorption form for both species --
-see [theory/defect_dynamics.md]). `geometry = void` for both species is not supported.
+see [theory/defect_dynamics.md]). `geometry = void` for both species is not supported. When both
+species are loops, the action also tells each loop kernel that its partner is a loop
+(`opposite_geometry = loop`, with the partner's Burgers vector and bias), so that the drain on each
+species' monomer by the other species' loops uses the loop absorption coefficient, the same one the
+other kernel uses to shrink its loops. A void partner keeps the void coefficient.
 
 The block also derives several quantities that would otherwise have to be computed outside MOOSE
 and typed in by hand:

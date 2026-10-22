@@ -520,6 +520,26 @@ DefectDynamicsAction::actAddNodalKernels()
                                            ? opposite->getParam<Real>("Z")
                                            : sp->getParam<Real>("Z_loop_opposite");
         params.set<Real>("alpha_loop_v") = sp->getParam<Real>("alpha_opposite");
+
+        // When the opposite species is ALSO a loop (e.g. vacancy modeled as a loop, following
+        // Pokor et al. 2004 Eqs 4a-4f), the monomer-pool loss (Piece B) must sum the opposite
+        // loops' absorption of THIS species' monomer with the loop form, not the void form: it is
+        // the very coefficient the opposite kernel evaluates as its own Piece A (its z_v,
+        // z_loop_v, alpha_loop_v, set by the branch above on that species' pass), so both sides of
+        // one absorption event use one rate. A void opposite keeps the kernel default (void form).
+        if (opposite->getParam<MooseEnum>("geometry") == "loop")
+        {
+          params.set<MooseEnum>("opposite_geometry") = "loop";
+          const Real opposite_burgers = opposite->getParam<Real>("burgers_vector");
+          params.set<Real>("opposite_burgers_vector") =
+              opposite_burgers != 0.0 ? opposite_burgers : lattice_parameter / std::sqrt(3.0);
+          params.set<Real>("opposite_z_i") = sp->getParam<Real>("Z");
+          params.set<Real>("opposite_z_loop_i") =
+              opposite->getParam<MooseEnum>("bias") == "constant"
+                  ? sp->getParam<Real>("Z")
+                  : opposite->getParam<Real>("Z_loop_opposite");
+          params.set<Real>("opposite_alpha_loop_i") = opposite->getParam<Real>("alpha_opposite");
+        }
       }
     }
 

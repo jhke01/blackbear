@@ -187,12 +187,23 @@ a monomer adds back exactly one unit,
 ### Piece B: Opposite-Monomer Drain
 
 The flux absorbed in Piece A has to come from somewhere: the opposite
-family's monomer pool. This loss is the sum, over family $x$'s +entire own
-array+, of the same $\beta^{opp}_{x,n}$ coefficients already used in Piece A --
+family's monomer pool. One absorption event removes one monomer from that pool and shrinks one
+cluster of family $x$ by one unit, so the two must happen at the same rate. This loss is therefore
+the sum, over family $x$'s +entire own array+, of the same $\beta^{opp}_{x,n}$ coefficients already
+used in Piece A --
 
 !equation
 \left.\frac{dC_{y,1}}{dt}\right|^{\text{Piece B}} =
 -C_{y,1}\sum_{n=2}^{N_x} \beta^{opp}_{x,n}\,C_{x,n}.
+
+The kernel on variable $y$ does not own family $x$'s parameters, so it must be told family $x$'s
+geometry. For a void family $x$ the coefficient is the void form above. For a loop family $x$ (for
+example a vacancy modeled as a loop) it is the loop form $2\pi r_n Z(n) D_y/V_{at}$ with family $x$'s
+own radius law and bias: [GenericInterstitialLoopGroupedNodalKernel.md] takes this from
+`opposite_geometry = loop` together with the opposite family's Burgers vector and bias parameters.
+Using the void form for a loop family drains the monomer pool at the wrong rate, and the total
+number of defects is no longer conserved (a factor of about 2.8 to 7 in the rate at the sizes of
+interest for Pokor's alloys).
 
 Because a nodal kernel can only write to its own variable's residual row, the
 kernel sitting on variable $y$ must recompute this sum itself, which is why
