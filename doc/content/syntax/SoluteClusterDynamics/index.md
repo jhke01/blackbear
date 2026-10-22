@@ -38,13 +38,6 @@ the coupling simply inactive.
   cascade_efficiency = 0.1
   dislocation_density = 1e15
 
-  [Grid]
-    explicit_max = 6
-    spacing = linear
-    linear_width = 4
-    geometric_ratio = 1.5
-  []
-
   [vacancy]
     geometry = void
     D0 = 1.19073105525e-8
@@ -53,6 +46,10 @@ the coupling simply inactive.
     Eb2 = 0.5
     exponent = 0.67
     num_cluster_sizes = 30
+    explicit_max = 6
+    group_spacing = linear
+    group_linear_width = 4
+    group_geometric_ratio = 1.5
   []
 []
 
@@ -83,6 +80,24 @@ If more than one `[DefectDynamics]` block is present, or if the vacancy species 
 unambiguously identified (for example, two `geometry = void` species in the same
 `[DefectDynamics]` block), `SoluteClusterDynamics` raises a clear error rather than silently
 picking one.
+
+## Grouping and Resolvable Clusters
+
+The solute array has its own grouping, set on the `[SoluteClusterDynamics]` block with the same
+names a `[DefectDynamics]` species uses:
+[!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/use_grouping),
+[!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/explicit_max),
+[!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/group_spacing),
+[!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/group_linear_width) and
+[!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/group_geometric_ratio). It does not
+depend on the grouping of any `[DefectDynamics]` species.
+
+[!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/resolvable_radius) works as it does on
+a `[DefectDynamics]` species. It gives the smallest cluster radius [m] that a characterization
+technique can see, and adds the outputs `<name>_resolvable_density` and
+`<name>_resolvable_avg_radius`, which count only clusters at or above that radius. It needs
+[!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/atomic_volume) to convert the radius to
+a cluster size. It replaces the older `density_n_minimum`, which still works but is deprecated.
 
 ## Example Input Syntax
 

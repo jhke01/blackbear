@@ -10,21 +10,40 @@ kernels ([GenericVacancyVoidGroupedNodalKernel.md], [GenericInterstitialLoopGrou
 [GenericCascadeSpectrumNodalKernel.md]; see [theory/defect_dynamics.md] for the underlying
 equations). One or two named species sub-blocks (commonly `[vacancy]` and `[interstitial]`,
 though the name is only a label) describe each species' own diffusivity, capillary
-formation-energy law, (for a loop) dislocation bias, and its own maximum cluster size; one
-`[Grid]` sub-block describes the grouped-tail *shape* (explicit size, bin spacing, growth ratio)
-shared by both species, and one optional `[Recovery]` sub-block describes a dislocation network
-shared by both species whose density evolves in time instead of staying fixed. A species also
+formation-energy law, (for a loop) dislocation bias, its own maximum cluster size and its own
+grouping of the size array (explicit size, bin spacing, growth ratio; see below). One optional
+`[Recovery]` sub-block describes a dislocation network shared by both species whose density
+evolves in time instead of staying fixed. A species also
 turns on cascade seeding of cluster sizes 2-4 simply by setting a nonzero cascade fraction on its
 own sub-block.
 
 Void and loop populations routinely grow to very different physical sizes under the same
-irradiation conditions, so the maximum cluster size itself is deliberately NOT part of the
-shared `[Grid]` block -- each species sets its own via
+irradiation conditions, so the maximum cluster size is set per species via
 [!param](/DefectDynamics/DefectSpeciesAction/num_cluster_sizes) (the cap given directly, as a
 point-defect count) or
 [!param](/DefectDynamics/DefectSpeciesAction/max_cluster_radius_m) (the cap given as a physical
 radius in meters, converted internally using that species' own monomer radius law); exactly one
 of the two must be given per species.
+
+### Grouping
+
+Each species describes the grouping of its own array under its own sub-block, with the same
+parameter names the grouped kernels use: [!param](/DefectDynamics/DefectSpeciesAction/use_grouping),
+[!param](/DefectDynamics/DefectSpeciesAction/explicit_max),
+[!param](/DefectDynamics/DefectSpeciesAction/group_spacing),
+[!param](/DefectDynamics/DefectSpeciesAction/group_linear_width) and
+[!param](/DefectDynamics/DefectSpeciesAction/group_geometric_ratio). A coarser grouping for the
+vacancy clusters than for the loops is therefore just a different value under `[vacancy]`. The
+opposite-species parameters of each kernel are filled in from the partner's own grouping.
+Setting [!param](/DefectDynamics/DefectSpeciesAction/use_grouping) to false gives every cluster
+size its own unknown; because the cost grows roughly with the square of the unknown count, a
+species without grouping is limited to 3000 sizes.
+
+!alert warning title=The `[Grid]` sub-block is deprecated
+The former shared `[Grid]` sub-block still works and supplies the grouping for any species that
+does not set its own, but it prints a deprecation warning. Move its parameters
+(`spacing` becomes `group_spacing`, `linear_width` becomes `group_linear_width`,
+`geometric_ratio` becomes `group_geometric_ratio`) into each species sub-block.
 
 The block builds, per species: the grouped array variable, its initial condition, a time
 derivative kernel, and the self/opposite-absorption kernel
