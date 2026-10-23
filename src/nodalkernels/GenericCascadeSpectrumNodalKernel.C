@@ -72,8 +72,10 @@ GenericCascadeSpectrumNodalKernelTempl<is_ad>::computeQpResidual(
 {
   residual.resize(_count);
   residual.setZero();
-  // Array component n - 1 holds explicit cluster size n (component 0 is the monomer); sizes 2,
-  // 3, 4 are always in the explicit region here since the constructor requires _count >= 4.
+  // Array component n - 1 holds explicit cluster size n (component 0 is the monomer). That holds
+  // for sizes 2, 3, 4 only if the variable's explicit_max is at least 4; the kernel sees just the
+  // component count, so the [DefectDynamics] action checks explicit_max and a hand-built input
+  // has to make sure of it.
   residual(1) = -(_generation * _f2 / 2.0);
   residual(2) = -(_generation * _f3 / 3.0);
   residual(3) = -(_generation * _f4 / 4.0);
