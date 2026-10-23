@@ -32,11 +32,23 @@ ContinuumLoopNodalKernel::validParams()
 {
   InputParameters params = ArrayNodalKernel::validParams();
   params.addClassDescription(
-      "Absorption and emission of two-dimensional loops whose size distribution is discrete up "
-      "to switch_size and a Fokker-Planck finite-volume continuum above it (Pokor et al. 2004, "
-      "Section 4.1), optionally with the shrinking by and the loss of monomers of the opposite "
-      "point-defect type.");
+      "Absorption and emission of a family of two-dimensional loops or three-dimensional voids "
+      "whose size distribution is discrete up to switch_size and a Fokker-Planck finite-volume "
+      "continuum above it (Pokor et al. 2004, Section 4.1), optionally with the shrinking by and "
+      "the loss of monomers of the opposite point-defect type.");
 
+  params.addParam<MooseEnum>(
+      "geometry",
+      MooseEnum("loop void", "loop"),
+      "Cluster geometry of this family: 'loop' (two-dimensional, radius ~ sqrt(n), dislocation "
+      "bias) or 'void' (three-dimensional, radius ~ n^(1/3), finite-sink-strength absorption "
+      "4 pi r D / ((1 + a0 / r) V_at)). A void ignores Z_loop and alpha, and Z is then only the "
+      "large-loop limit of the opposite loops' bias for capturing this family's monomer.");
+  params.addParam<MooseEnum>(
+      "opposite_geometry",
+      MooseEnum("loop void", "loop"),
+      "Cluster geometry of the opposite family (opposite_coupled_var): sets the coefficient at "
+      "which its clusters absorb this family's monomer.");
   params.addRequiredParam<Real>("generation", "Monomer generation rate G_1 [1/s].");
   params.addParam<Real>("sink", 0.0, "Linear sink coefficient of the monomer, k_s [1/s].");
   params.addRequiredParam<Real>("temperature", "Temperature T [K].");
@@ -126,6 +138,8 @@ ContinuumLoopNodalKernel::ContinuumLoopNodalKernel(const InputParameters & param
     _energy_exponent(getParam<Real>("energy_exponent")),
     _energy_coefficient_eV(getParam<Real>("energy_coefficient_eV")),
     _energy_constant_eV(getParam<Real>("energy_constant_eV")),
+    _is_void(getParam<MooseEnum>("geometry") == "void"),
+    _opposite_is_void(getParam<MooseEnum>("opposite_geometry") == "void"),
     _opposite_active(isCoupled("opposite_coupled_var")),
     _opposite_diffusivity(
         getParam<Real>("opposite_D0") *
@@ -194,10 +208,20 @@ ContinuumLoopNodalKernel::biasFactor(
 }
 
 Real
+ContinuumLoopNodalKernel::voidBeta(unsigned int n, Real diffusivity) const
+{
+  const Real radius = std::cbrt(3.0 * static_cast<Real>(n) * _atomic_volume / (4.0 * libMesh::pi));
+  return 4.0 * libMesh::pi * radius * diffusivity /
+         ((1.0 + _lattice_parameter / radius) * _atomic_volume);
+}
+
+Real
 ContinuumLoopNodalKernel::oppositeBeta(unsigned int n) const
 {
   if (n == 0)
     return 0.0;
+  if (_is_void)
+    return voidBeta(n, _opposite_diffusivity);
   const Real radius =
       std::sqrt(static_cast<Real>(n) * _atomic_volume / (libMesh::pi * _burgers_vector));
   return 2.0 * libMesh::pi * radius *
@@ -210,6 +234,8 @@ ContinuumLoopNodalKernel::partnerBeta(unsigned int n) const
 {
   if (n == 0)
     return 0.0;
+  if (_opposite_is_void)
+    return voidBeta(n, _diffusivity);
   const Real radius =
       std::sqrt(static_cast<Real>(n) * _atomic_volume / (libMesh::pi * _opposite_burgers_vector));
   // The opposite family's own Burgers vector sets both the radius and the small-loop scale of the bias
@@ -223,6 +249,8 @@ ContinuumLoopNodalKernel::beta(unsigned int n) const
 {
   if (n == 0)
     return 0.0;
+  if (_is_void)
+    return voidBeta(n, _diffusivity);
   const Real radius =
       std::sqrt(static_cast<Real>(n) * _atomic_volume / (libMesh::pi * _burgers_vector));
   // Z(n) = Z + [sqrt(b / (8 pi a0)) Z_loop - Z] n^(-alpha / 2): sqrt(b / (8 pi a0)) Z_loop at n =

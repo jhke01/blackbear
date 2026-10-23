@@ -113,8 +113,8 @@ DefectDynamicsAction::validParams()
       "sizes up to switch_size are individual unknowns and larger sizes are finite-volume cells of "
       "a Fokker-Planck continuum (Pokor et al. 2004, Section 4.1), set by switch_size and the "
       "continuum_* parameters. The continuum needs far fewer unknowns for the same accuracy, but "
-      "supports only loop species with the capillary binding-energy model, and both species must "
-      "have the same maximum cluster size.");
+      "supports only the capillary binding-energy model, and both species must have the same "
+      "maximum cluster size.");
   params.addParam<unsigned int>(
       "switch_size",
       100,
@@ -239,11 +239,6 @@ DefectDynamicsAction::validateTail() const
   const auto sp_list = species();
   for (const auto * sp : sp_list)
   {
-    if (sp->getParam<MooseEnum>("geometry") != "loop")
-      mooseError("[DefectDynamics] with tail = fokker_planck supports loop species only, but "
-                 "species '",
-                 sp->name(),
-                 "' has geometry = void.");
     if (sp->getParam<MooseEnum>("binding_energy_model") != "capillary")
       mooseError("[DefectDynamics] with tail = fokker_planck supports only the capillary "
                  "binding-energy model, but species '",
@@ -482,6 +477,7 @@ DefectDynamicsAction::addContinuumKernel(const DefectSpeciesAction & sp,
   params.set<Real>("temperature") = getParam<Real>("temperature");
   params.set<Real>("atomic_volume") = atomic_volume;
   params.set<Real>("lattice_parameter") = lattice_parameter;
+  params.set<MooseEnum>("geometry") = sp.getParam<MooseEnum>("geometry");
   params.set<Real>("burgers_vector") = sp.getParam<Real>("burgers_vector");
   params.set<Real>("D0") = sp.getParam<Real>("D0");
   params.set<Real>("Em_eV") = sp.getParam<Real>("Em");
@@ -514,6 +510,7 @@ DefectDynamicsAction::addContinuumKernel(const DefectSpeciesAction & sp,
     const Real default_b = lattice_parameter / std::sqrt(3.0);
 
     params.set<std::vector<VariableName>>("opposite_coupled_var") = {variableName(*opposite)};
+    params.set<MooseEnum>("opposite_geometry") = opposite->getParam<MooseEnum>("geometry");
     params.set<Real>("opposite_D0") = opposite->getParam<Real>("D0");
     params.set<Real>("opposite_Em_eV") = opposite->getParam<Real>("Em");
     params.set<Real>("opposite_Z") = opposite_Z;

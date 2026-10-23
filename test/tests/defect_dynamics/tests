@@ -428,13 +428,19 @@
     design = 'ContinuumLoopNodalKernel.md'
     requirement = 'BlackBear shall solve a vacancy and an interstitial loop family with a Fokker-Planck continuum tail built from ContinuumLoopNodalKernel, CascadeSpectrumNodalKernel, DislocationRecoveryNodalKernel and PointDefectRecombinationNodalKernel, giving the reference solution that the [DefectDynamics] action reproduces with tail = fokker_planck.'
   []
-  [defect_dynamics_fokker_planck_void_error]
-    type = RunException
-    input = defect_dynamics_fokker_planck_action.i
-    cli_args = "DefectDynamics/vacancy/geometry=void"
-    expect_err = "supports loop species only"
-    design = 'DefectDynamicsAction.md'
-    requirement = 'BlackBear shall error when a [DefectDynamics] block with tail = fokker_planck has a void species, since the continuum tail is implemented for loops.'
+  [defect_dynamics_fokker_planck_void_action]
+    type = CSVDiff
+    input = defect_dynamics_fokker_planck_void_action.i
+    csvdiff = 'defect_dynamics_fokker_planck_void_action_out.csv defect_dynamics_fokker_planck_void_action_DefectDynamics_size_distribution_csv_vacancy_size_distribution_0004.csv'
+    design = 'DefectDynamicsAction.md DefectSpeciesAction.md ContinuumLoopNodalKernel.md'
+    requirement = 'BlackBear shall build a vacancy void and an interstitial loop species, whose large cluster sizes are a Fokker-Planck continuum (tail = fokker_planck), from a [DefectDynamics] block, using the void radius and finite-sink-strength absorption for the void, the loop bias for the loop, and the matching coefficients for each species absorbing the monomer of the other.'
+  []
+  [defect_dynamics_fokker_planck_void_hand]
+    type = CSVDiff
+    input = defect_dynamics_fokker_planck_void_hand.i
+    csvdiff = 'defect_dynamics_fokker_planck_void_hand_out.csv'
+    design = 'ContinuumLoopNodalKernel.md'
+    requirement = 'BlackBear shall solve a vacancy void family and an interstitial loop family with a Fokker-Planck continuum tail built from ContinuumLoopNodalKernel with geometry and opposite_geometry, giving the reference solution that the [DefectDynamics] action reproduces for a void and a loop with tail = fokker_planck.'
   []
   [defect_dynamics_fokker_planck_binding_table_error]
     type = RunException

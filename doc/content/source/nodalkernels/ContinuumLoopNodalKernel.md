@@ -4,13 +4,20 @@
 
 ## Description
 
-`ContinuumLoopNodalKernel` evolves the size distribution of one family of two-dimensional loops
-with a representation that is discrete for small sizes and a Fokker-Planck continuum for large
-ones, as described for loops larger than about 100 atoms by [!cite](pokor2004). It is an alternative
-to the grouped $L_0/L_1$ representation of
-[GenericInterstitialLoopGroupedNodalKernel.md]: the physics (loop radius, size-dependent bias,
-detailed-balance emission from a capillary-law binding energy) is the same, and only the way the
-large sizes are stored differs.
+`ContinuumLoopNodalKernel` evolves the size distribution of one family of two-dimensional loops or
+three-dimensional voids (set by [!param](/NodalKernels/ContinuumLoopNodalKernel/geometry)) with a
+representation that is discrete for small sizes and a Fokker-Planck continuum for large ones, as
+described for loops larger than about 100 atoms by [!cite](pokor2004). It is an alternative to the
+grouped $L_0/L_1$ representation of [GenericInterstitialLoopGroupedNodalKernel.md] and
+[GenericVacancyVoidGroupedNodalKernel.md]: the physics (the radius, the size-dependent bias of a
+loop, the finite-sink-strength absorption of a void, detailed-balance emission from a capillary-law
+binding energy) is the same, and only the way the large sizes are stored differs. A void ignores
+[!param](/NodalKernels/ContinuumLoopNodalKernel/Z_loop) and
+[!param](/NodalKernels/ContinuumLoopNodalKernel/alpha); its
+[!param](/NodalKernels/ContinuumLoopNodalKernel/Z) only sets the large-loop limit of the bias with
+which loops of the opposite family absorb its monomer
+([!param](/NodalKernels/ContinuumLoopNodalKernel/opposite_geometry) selects the form of the
+coefficient for the opposite family).
 
 The kernel can model one loop family with a monomer source and a linear sink, or two families that
 shrink by absorbing each other's monomers (see [Two coupled families](#two-families)). Recombination,

@@ -19,12 +19,14 @@
 #include "ClusterContinuumLayout.h"
 
 /**
- * Self-absorption and thermal emission of a family of two-dimensional loops whose size
- * distribution is discrete up to switch_size and a Fokker-Planck continuum above it (Pokor et al.
- * 2004, Section 4.1), the alternative to the L0/L1 grouping of
- * GenericInterstitialLoopGroupedNodalKernel. The rate coefficients are those of that kernel: loop
- * radius sqrt(n V_at / (pi b)), the size-dependent bias Z(n), and detailed-balance emission from a
- * capillary-law binding energy. The array variable has one component for the monomer, one for
+ * Self-absorption and thermal emission of a family of two-dimensional loops (or three-dimensional
+ * voids) whose size distribution is discrete up to switch_size and a Fokker-Planck continuum above
+ * it (Pokor et al. 2004, Section 4.1), the alternative to the L0/L1 grouping of
+ * GenericInterstitialLoopGroupedNodalKernel and GenericVacancyVoidGroupedNodalKernel. The rate
+ * coefficients are those of those kernels: for a loop the radius sqrt(n V_at / (pi b)) and the
+ * size-dependent bias Z(n), for a void the radius (3 n V_at / (4 pi))^(1/3) and the
+ * finite-sink-strength absorption, and detailed-balance emission from a capillary-law binding
+ * energy. The array variable has one component for the monomer, one for
  * each discrete size 2 .. switch_size, and one for each continuum cell (ClusterContinuumLayout).
  *
  * With opposite_coupled_var, the loops also shrink by absorbing a monomer of the other point-defect
@@ -49,6 +51,10 @@ protected:
 
   /// Emission coefficient alpha(n) = beta(n - 1) exp(-E_b(n) / kT), n >= 2
   Real alpha(unsigned int n) const;
+
+  /// Absorption coefficient 4 pi r D / ((1 + a0 / r) V_at) of a void of n vacancies for a monomer of
+  /// diffusivity D
+  Real voidBeta(unsigned int n, Real diffusivity) const;
 
   /// Rate coefficient at which this family's loops absorb a monomer of the opposite type, 2 pi r(n)
   /// Z_opposite(n) D_opposite / V_at, with this family's radius
@@ -79,6 +85,8 @@ protected:
   const Real _energy_coefficient_eV;
   const Real _energy_constant_eV;
 
+  const bool _is_void;
+  const bool _opposite_is_void;
   const bool _opposite_active;
   const Real _opposite_diffusivity;
   const Real _opposite_burgers_vector;
