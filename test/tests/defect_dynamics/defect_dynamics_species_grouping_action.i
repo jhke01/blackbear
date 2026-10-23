@@ -2,6 +2,12 @@
 # the loop uses explicit sizes to 10 and geometric bins (width 3, ratio 1.4). Sizes 40 and 60 also
 # differ, so every array has its own layout. defect_dynamics_species_grouping_hand.i is the same
 # problem with each array's grouping typed out in the variable, IC, kernel and postprocessors.
+# The run uses a high dose rate and a long step (dpa_rate 1.5, dt 1e-2, 6 steps) so that clusters well
+# beyond the explicit sizes are populated. With the original 3 steps of 1e-5 s only the monomer and dimer
+# were non-negligible, so changing a bin width or explicit_max left the output unchanged. Now a change of
+# the void bin width moves the result by about 0.3% and of explicit_max by about 0.04%, against a
+# comparison tolerance of 5.5e-6.
+
 [Mesh]
   type = SingleNodeMesh
   position = '0 0 0'
@@ -16,7 +22,7 @@
   temperature = 573
   atomic_volume = 1.1664e-29
   lattice_parameter = 0.36e-9
-  dpa_rate = 1.5e-3
+  dpa_rate = 1.5
   cascade_efficiency = 0.1
   dislocation_density = 1e15
 
@@ -74,8 +80,8 @@
   petsc_options_value = 'lu       nd'
   nl_rel_tol = 1e-8
   nl_abs_tol = 1e-20
-  dt = 1e-5
-  num_steps = 3
+  dt = 1e-2
+  num_steps = 6
 []
 
 [Outputs]

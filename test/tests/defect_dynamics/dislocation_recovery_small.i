@@ -1,17 +1,14 @@
-# Direct numerical check of DislocationRecoveryNodalKernel's closed-form rho(t), isolated from
-# the void self-reaction kernel's own capillary emission (generation, void_energy_* set to make
-# that kernel's own contribution zero for n > 1: no monomer production, same formation_energy_eV
-# at every size via a zero exponent/coefficient would be ambiguous, so instead generation = 0 and
-# a short enough run that absorption/emission from the near-zero initial monomer population
-# stays negligible next to the recovery sink's own loss) so the only appreciable loss mechanism
-# left is this kernel's own rho(t)*D*Z term, letting the resulting monomer concentration be
-# compared directly against the closed-form rho(t) evaluated by hand with the same
-# rho0/K/burgers_vector (see the comment in GenericDislocationRecoveryNodalKernel.C: rho(t) =
-# (rho0^(-1/2) + K*b^2*t/2)^(-2)).
+# Check of DislocationRecoveryNodalKernel's time-dependent dislocation density
+# rho(t) = (rho0^(-1/2) + K*b^2*t/2)^(-2) (see GenericDislocationRecoveryNodalKernel.C). The void
+# kernel's own constant sink is zero, so the recovery kernel supplies the dislocation loss. A monomer
+# source (generation) and a run of 2 s, long enough for rho(t) to fall by a factor of about 500, put
+# the monomer concentration near 2e-5, far above the CSV comparison floor. The recovery sink is then
+# visible in the result: with K = 0 (constant density) the monomer changes by 1.6%, and a 10% change
+# in K by 0.017%, both far above the comparison tolerance. (An earlier version had no source and a
+# 3e-5 s run, so its monomer concentration of about 4e-15 was below the comparison floor and the test
+# could not fail.)
 #
-# D0/Em_eV/temperature/Z/rho0/K/burgers_vector below exactly match dislocation_recovery_jacobian.i,
-# so this test's hand-computed rho(t) values (t=1e-5: 9.997840e13 /m^3, t=2e-5: 9.995681e13,
-# t=3e-5: 9.993523e13) are directly reusable to sanity-check that Jacobian test's own setup.
+# D0/Em_eV/temperature/Z/rho0/K/burgers_vector below match dislocation_recovery_jacobian.i.
 
 [Mesh]
   type = SingleNodeMesh
@@ -67,7 +64,7 @@
     type = VacancyVoidGroupedNodalKernel
     variable = vacancy_clusters
 
-    generation = 0.0
+    generation = 1.5e-4
     sink = 0.0
 
     temperature = 573
@@ -118,8 +115,8 @@
   petsc_options_value = 'lu       nd'
   nl_rel_tol = 1e-8
   nl_abs_tol = 1e-20
-  dt = 1e-5
-  num_steps = 3
+  dt = 0.25
+  num_steps = 8
 []
 
 [Outputs]

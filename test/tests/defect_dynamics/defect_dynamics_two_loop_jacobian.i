@@ -2,6 +2,13 @@
 # (opposite_geometry = loop on both InterstitialLoopGroupedNodalKernel instances, e.g. a vacancy modeled
 # as a loop following Pokor et al. 2004). Uses the same smooth profile and reduced test-only D0 values as
 # defect_dynamics_opposite_absorption_jacobian.i, for the same reason given there.
+#
+# The Jacobian is compared WITHOUT a time-derivative kernel and with the nonnegativity limiter off. A
+# 1/dt mass term makes ||J|| about 6e5 against a physics part of about 0.5, so the tolerance below would
+# accept a missing or sign-flipped off-diagonal block; the limiter's kinks are not differentiable and
+# would hide the rest. The profile amplitude is large enough that the physics terms are well above the
+# finite-difference noise. With SMP full = false (no cross-species block) this input gives a ratio of
+# 0.1 to 0.7, against about 2e-8 here.
 
 [Mesh]
   type = SingleNodeMesh
@@ -20,7 +27,7 @@
   group_spacing = linear
   group_linear_width = 4
   group_geometric_ratio = 1.5
-  enforce_group_nonnegative = true
+  enforce_group_nonnegative = false
   group_nonnegative_tolerance_factor = 0.0
 
   opposite_num_cluster_sizes = 30
@@ -29,7 +36,7 @@
   opposite_group_spacing = linear
   opposite_group_linear_width = 4
   opposite_group_geometric_ratio = 1.5
-  opposite_enforce_group_nonnegative = true
+  opposite_enforce_group_nonnegative = false
   opposite_group_nonnegative_tolerance_factor = 0.0
 []
 
@@ -47,11 +54,11 @@
 [Functions]
   [vacancy_index_fn]
     type = ParsedFunction
-    expression = 'if(x < 15.5, 1.5e-9 * exp(-0.2 * x), 1e-11)'
+    expression = 'if(x < 15.5, 1 * exp(-0.2 * x), 1e-2)'
   []
   [interstitial_index_fn]
     type = ParsedFunction
-    expression = 'if(x < 15.5, 1.2e-9 * exp(-0.15 * x), 1e-11)'
+    expression = 'if(x < 15.5, 1 * exp(-0.15 * x), 1e-2)'
   []
 []
 
@@ -69,10 +76,6 @@
 []
 
 [NodalKernels]
-  [vacancy_dot]
-    type = ArrayTimeDerivativeNodalKernel
-    variable = vacancy_clusters
-  []
   [vacancy_dyn]
     type = InterstitialLoopGroupedNodalKernel
     variable = vacancy_clusters
@@ -108,10 +111,6 @@
     opposite_alpha_loop_i = 0.65
   []
 
-  [interstitial_dot]
-    type = ArrayTimeDerivativeNodalKernel
-    variable = interstitial_clusters
-  []
   [interstitial_dyn]
     type = InterstitialLoopGroupedNodalKernel
     variable = interstitial_clusters

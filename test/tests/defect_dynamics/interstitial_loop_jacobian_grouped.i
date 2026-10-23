@@ -22,6 +22,13 @@
 # state). This is the same reason the Cu-precipitation kernel's own
 # cluster_dynamics_jacobian_grouped.i uses free toy rate coefficients
 # (beta0, alpha0) rather than physical Arrhenius values.
+#
+# The Jacobian is compared WITHOUT a time-derivative kernel and with the nonnegativity limiter off. A
+# 1/dt mass term makes ||J|| about 6e5 against a physics part of about 0.5, so the tolerance below would
+# accept a missing or sign-flipped off-diagonal block; the limiter's kinks are not differentiable and
+# would hide the rest. The profile amplitude is large enough that the physics terms are well above the
+# finite-difference noise. With SMP full = false (no cross-species block) this input gives a ratio of
+# 0.1 to 0.7, against about 2e-8 here.
 
 [Mesh]
   type = SingleNodeMesh
@@ -40,7 +47,7 @@
   group_spacing = linear
   group_linear_width = 4
   group_geometric_ratio = 1.5
-  enforce_group_nonnegative = true
+  enforce_group_nonnegative = false
   group_nonnegative_tolerance_factor = 0.0
 []
 
@@ -56,7 +63,7 @@
     # smooth decay with a step inside the grouped tail so that some bins are slope limited,
     # scaled to a physically reasonable site-fraction concentration (~1e-9)
     type = ParsedFunction
-    expression = 'if(x < 15.5, 1.5e-9 * exp(-0.2 * x), 1e-11)'
+    expression = 'if(x < 15.5, 1 * exp(-0.2 * x), 1e-2)'
   []
 []
 
@@ -69,10 +76,6 @@
 []
 
 [NodalKernels]
-  [interstitial_dot]
-    type = ArrayTimeDerivativeNodalKernel
-    variable = interstitial_clusters
-  []
   [interstitial_dyn]
     type = InterstitialLoopGroupedNodalKernel
     variable = interstitial_clusters

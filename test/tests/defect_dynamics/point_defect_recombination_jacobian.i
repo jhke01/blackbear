@@ -6,6 +6,13 @@
 # for the same reason given there (the physical D0_i makes beta(1) ~4.6e9,
 # far outside what PETSc's -snes_test_jacobian can resolve with its single
 # global finite-difference step length).
+#
+# The Jacobian is compared WITHOUT a time-derivative kernel and with the nonnegativity limiter off. A
+# 1/dt mass term makes ||J|| about 6e5 against a physics part of about 0.5, so the tolerance below would
+# accept a missing or sign-flipped off-diagonal block; the limiter's kinks are not differentiable and
+# would hide the rest. The profile amplitude is large enough that the physics terms are well above the
+# finite-difference noise. With SMP full = false (no cross-species block) this input gives a ratio of
+# 0.1 to 0.7, against about 2e-8 here.
 
 [Mesh]
   type = SingleNodeMesh
@@ -24,7 +31,7 @@
   group_spacing = linear
   group_linear_width = 4
   group_geometric_ratio = 1.5
-  enforce_group_nonnegative = true
+  enforce_group_nonnegative = false
   group_nonnegative_tolerance_factor = 0.0
 []
 
@@ -42,11 +49,11 @@
 [Functions]
   [vacancy_index_fn]
     type = ParsedFunction
-    expression = 'if(x < 15.5, 1.5e-9 * exp(-0.2 * x), 1e-11)'
+    expression = 'if(x < 15.5, 1 * exp(-0.2 * x), 1e-2)'
   []
   [interstitial_index_fn]
     type = ParsedFunction
-    expression = 'if(x < 15.5, 1.2e-9 * exp(-0.15 * x), 1e-11)'
+    expression = 'if(x < 15.5, 1 * exp(-0.15 * x), 1e-2)'
   []
 []
 
@@ -64,10 +71,6 @@
 []
 
 [NodalKernels]
-  [vacancy_dot]
-    type = ArrayTimeDerivativeNodalKernel
-    variable = vacancy_clusters
-  []
   [vacancy_dyn]
     type = VacancyVoidGroupedNodalKernel
     variable = vacancy_clusters
@@ -93,10 +96,6 @@
     recombination_rate = 64642.59505799026
   []
 
-  [interstitial_dot]
-    type = ArrayTimeDerivativeNodalKernel
-    variable = interstitial_clusters
-  []
   [interstitial_dyn]
     type = InterstitialLoopGroupedNodalKernel
     variable = interstitial_clusters

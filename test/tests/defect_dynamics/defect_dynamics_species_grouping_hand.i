@@ -1,6 +1,11 @@
 # Hand-built twin of defect_dynamics_species_grouping_action.i: the same void and loop species, with
 # each array's own grouping typed out in [GroupedVariables], [ICs], the kernels (own array and the
 # partner's, opposite_*) and the postprocessors.
+# The run uses a high dose rate and a long step (dpa_rate 1.5, dt 1e-2, 6 steps) so that clusters well
+# beyond the explicit sizes are populated. With the original 3 steps of 1e-5 s only the monomer and dimer
+# were non-negligible, so changing a bin width or explicit_max left the output unchanged. Now a change of
+# the void bin width moves the result by about 0.3% and of explicit_max by about 0.04%, against a
+# comparison tolerance of 5.5e-6.
 
 [Mesh]
   type = SingleNodeMesh
@@ -82,7 +87,7 @@
     type = VacancyVoidGroupedNodalKernel
     variable = vacancy_clusters
 
-    generation = 1.5e-4
+    generation = 0.15
     sink = 2.2521186324898173
 
     temperature = 573
@@ -128,7 +133,7 @@
     type = InterstitialLoopGroupedNodalKernel
     variable = interstitial_clusters
 
-    generation = 1.5e-4
+    generation = 0.15
     sink = 7330.943459224491
 
     temperature = 573
@@ -271,8 +276,8 @@
   petsc_options_value = 'lu       nd'
   nl_rel_tol = 1e-8
   nl_abs_tol = 1e-20
-  dt = 1e-5
-  num_steps = 3
+  dt = 1e-2
+  num_steps = 6
 []
 
 [Outputs]
