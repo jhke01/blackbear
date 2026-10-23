@@ -6,6 +6,12 @@
 # num_cluster_sizes = 30), with explicit sizes (1-6) and grouped-bin-reconstructed sizes (7-30)
 # both present, while interstitial (output_size_distribution left at its false default) gets no
 # such output and the regular [Outputs] csv = true scalar history is unaffected.
+#
+# The run uses a high dose rate and 3 ms steps (output at the third step, 9 ms) so that sizes 1 to 9
+# are above the CSV comparison floor of 1e-10 and the grouped sizes 7 to 9 depend on the bin layout.
+# With the former 1e-5 s steps only size 1 was above the floor, so the comparison could not notice a
+# change in the grouped reconstruction. A wider bin changes the result by 47% here and a smaller
+# explicit_max by 100%, against a tolerance of 5.5e-6.
 
 [Mesh]
   type = SingleNodeMesh
@@ -21,12 +27,12 @@
   temperature = 573
   atomic_volume = 1.1664e-29
   lattice_parameter = 0.36e-9
-  dpa_rate = 1.5e-3
+  dpa_rate = 150
   cascade_efficiency = 0.1
   dislocation_density = 1e15
   recombination_radius = 9e-10
 
-  size_distribution_times = '2e-5'
+  size_distribution_times = '9e-3'
 
   [vacancy]
     geometry = loop
@@ -82,8 +88,8 @@
   petsc_options_value = 'lu       nd'
   nl_rel_tol = 1e-8
   nl_abs_tol = 1e-20
-  dt = 1e-5
-  num_steps = 3
+  dt = 3e-3
+  num_steps = 4
 []
 
 [Outputs]

@@ -9,10 +9,12 @@
 # making alpha(2) ~ 1e-10 (vs. a cascade-driven dc2/dt ~ 1.5e-5): fourteen orders of magnitude too
 # small to matter. With that, each seeded component's concentration after n steps of dt is simply
 # n*dt*generation*f_k/k for cluster size k -- compared directly against hand-computed values below
-# (generation = 1.5e-4, f2 = 0.2, f3 = 0.1, f4 = 0.05):
-#   t=1e-5: c2=1.5e-10,  c3=5e-11,  c4=1.875e-11
-#   t=2e-5: c2=3.0e-10,  c3=1.0e-10, c4=3.75e-11
-#   t=3e-5: c2=4.5e-10,  c3=1.5e-10, c4=5.625e-11
+# (generation = 1.5e-4, f2 = 0.2, f3 = 0.1, f4 = 0.05, dt = 1e-2):
+#   t=0.01: c2=1.5e-7,  c3=5e-8,   c4=1.875e-8
+#   t=0.02: c2=3.0e-7,  c3=1.0e-7, c4=3.75e-8
+#   t=0.03: c2=4.5e-7,  c3=1.5e-7, c4=5.625e-8
+# (With the former step of 1e-5 these were 1000 times smaller, and c3 and c4 were below the CSV
+# comparison floor of 1e-10, so only c2 was actually compared.)
 # CascadeSpectrumNodalKernel does not touch the monomer row itself (the enclosing
 # DefectDynamicsAction reduces the core kernel's own "generation" parameter instead, exercised by
 # defect_dynamics_cascade_action.i), so the monomer concentration stays at (solver-converged)
@@ -134,7 +136,7 @@
   petsc_options_value = 'lu       nd'
   nl_rel_tol = 1e-8
   nl_abs_tol = 1e-20
-  dt = 1e-5
+  dt = 1e-2
   num_steps = 3
 []
 
