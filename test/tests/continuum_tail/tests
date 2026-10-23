@@ -18,6 +18,20 @@
     design = 'ContinuumLoopNodalKernel.md'
     requirement = 'BlackBear shall provide a Jacobian, including the off-diagonal blocks, for two coupled discrete-plus-continuum loop families that shrink by absorbing each other\'s monomers, that agrees with a finite difference of the residual.'
   []
+  [continuum_moments]
+    type = CSVDiff
+    input = continuum_moments.i
+    csvdiff = 'continuum_moments_out.csv'
+    design = 'ClusterContinuumMoment.md'
+    requirement = 'BlackBear shall compute the number density, the point-defect content and the mean radius of a cluster size distribution that is discrete up to a switch size and a continuum above it, with a minimum cluster size that cuts a continuum cell at the lower edge of that size, so that a constant concentration per unit size gives the exact values.'
+  []
+  [continuum_distribution]
+    type = CSVDiff
+    input = continuum_distribution.i
+    csvdiff = 'continuum_distribution_out_distribution_0001.csv'
+    design = 'ClusterContinuumDistribution.md'
+    requirement = 'BlackBear shall report the size distribution of a cluster variable that is discrete up to a switch size and a continuum above it, with the size, the width of the size interval, the concentration per unit size and the radius of every discrete size and continuum cell.'
+  []
   [continuum_loop_transient]
     type = CSVDiff
     input = continuum_loop_transient.i
