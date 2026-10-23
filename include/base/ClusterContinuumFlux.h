@@ -21,6 +21,21 @@
 #include <vector>
 
 /**
+ * Linear interpolation of a function of the integer size at a real-valued size, clamped to
+ * 0 .. last, as in the SUNDIALS Pokor benchmark.
+ */
+template <typename F>
+Real
+interpolateClusterCoefficient(const F & f, Real size, int last)
+{
+  const int floor_size = static_cast<int>(std::floor(size));
+  const Real frac = size - static_cast<Real>(floor_size);
+  const int lo = std::min(std::max(floor_size, 0), last);
+  const int hi = std::min(std::max(floor_size + 1, 0), last);
+  return (1.0 - frac) * f(static_cast<unsigned int>(lo)) + frac * f(static_cast<unsigned int>(hi));
+}
+
+/**
  * Absorption and emission coefficients of one cluster family, evaluated where the continuum tail
  * needs them: at the discrete sizes, and at the centers and faces of the continuum cells. The
  * coefficients at a real-valued size are interpolated linearly between the two neighboring
@@ -50,14 +65,7 @@ struct ClusterContinuumCoefficients
     const int last = static_cast<int>(layout.numClusterSizes());
 
     auto interpolate = [last](const auto & f, Real size)
-    {
-      const int floor_size = static_cast<int>(std::floor(size));
-      const Real frac = size - static_cast<Real>(floor_size);
-      const int lo = std::min(std::max(floor_size, 0), last);
-      const int hi = std::min(std::max(floor_size + 1, 0), last);
-      return (1.0 - frac) * f(static_cast<unsigned int>(lo)) +
-             frac * f(static_cast<unsigned int>(hi));
-    };
+    { return interpolateClusterCoefficient(f, size, last); };
 
     beta_discrete.assign(sw + 1, 0.0);
     alpha_discrete.assign(sw + 2, 0.0);
@@ -81,6 +89,58 @@ struct ClusterContinuumCoefficients
       }
     }
   }
+};
+
+/**
+ * Rate coefficients beta(n) at which clusters of one family absorb a monomer of the OTHER point
+ * defect type, which shrinks them by one. Needed at the discrete sizes 1 .. switch_size + 1 and at
+ * the centers and faces of the continuum cells.
+ */
+struct ClusterContinuumAbsorption
+{
+  /// beta(n), n = 1 .. switch_size + 1 (index 0 unused)
+  std::vector<Real> discrete;
+  /// beta at the center of each cell
+  std::vector<Real> center;
+  /// beta at the face between cell f - 1 and cell f, f = 1 .. numCells - 1 (index 0 unused)
+  std::vector<Real> face;
+
+  template <typename Beta>
+  void build(const ClusterContinuumLayout & layout, const Beta & beta)
+  {
+    const unsigned int sw = layout.switchSize();
+    const unsigned int nc = layout.numCells();
+    const int last = static_cast<int>(layout.numClusterSizes());
+    auto interpolate = [last](const auto & f, Real size)
+    { return interpolateClusterCoefficient(f, size, last); };
+
+    discrete.assign(sw + 2, 0.0);
+    for (unsigned int n = 1; n <= sw + 1; ++n)
+      discrete[n] = beta(n);
+    center.assign(nc, 0.0);
+    face.assign(nc, 0.0);
+    for (unsigned int k = 0; k < nc; ++k)
+    {
+      center[k] = interpolate(beta, layout.cell(k).center);
+      if (k >= 1)
+        face[k] = interpolate(beta, layout.cell(k - 1).right);
+    }
+  }
+};
+
+/**
+ * The other point-defect family that this one reacts with. Both families must use the same
+ * ClusterContinuumLayout. Column numbers of the Jacobian at or above componentCount() belong to the
+ * partner: column componentCount() + j is partner component j.
+ */
+struct ClusterContinuumOpposite
+{
+  /// This family absorbing the partner's monomer (shrinking by one)
+  const ClusterContinuumAbsorption * own_absorption = nullptr;
+  /// The partner's clusters absorbing this family's monomer
+  const ClusterContinuumAbsorption * partner_absorption = nullptr;
+  /// The partner's concentrations, componentCount() values
+  const Real * partner_state = nullptr;
 };
 
 /**
@@ -124,7 +184,8 @@ public:
             const ClusterContinuumCoefficients & coefficients,
             Real generation,
             Real sink,
-            std::vector<Real> & rate) const;
+            std::vector<Real> & rate,
+            const ClusterContinuumOpposite * opposite = nullptr) const;
 
   /**
    * Jacobian of -rate with respect to the state. With use_limiter the derivative goes through the
@@ -136,7 +197,8 @@ public:
   void jacobian(const Real * state,
                 const ClusterContinuumCoefficients & coefficients,
                 Real sink,
-                std::vector<Triplet> & triplets) const;
+                std::vector<Triplet> & triplets,
+                const ClusterContinuumOpposite * opposite = nullptr) const;
 
 private:
   struct Flux
@@ -144,8 +206,9 @@ private:
     Real value = 0.0;
     unsigned int count = 0;
 
-    /// The monomer, the two cells next to the face and the cells their limited slopes depend on
-    static constexpr unsigned int max_components = 5;
+    /// The monomers (own and partner), the two cells next to the face and the cells their limited
+    /// slopes depend on
+    static constexpr unsigned int max_components = 8;
     unsigned int component[max_components] = {};
     Real partial[max_components] = {};
 
@@ -163,9 +226,15 @@ private:
     }
   };
 
+  /// With opposite, the flux of the shrinking reactions is added to each flux
   void evaluate(const Real * state,
                 const ClusterContinuumCoefficients & coefficients,
+                const ClusterContinuumOpposite * opposite,
                 std::vector<Flux> & flux) const;
+
+  /// Sum over sizes 2 .. N of beta(n) C_n, the rate per unit partner monomer at which the clusters
+  /// absorb it
+  Real absorptionSum(const Real * state, const ClusterContinuumAbsorption & absorption) const;
 
   /// Index of the flux into cell k from the left (k = 0: the last discrete flux)
   unsigned int fluxIntoCell(unsigned int k) const { return _layout.switchSize() - 1 + k; }

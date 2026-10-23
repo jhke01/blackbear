@@ -53,9 +53,22 @@ ClusterContinuumFlux::ClusterContinuumFlux(const ClusterContinuumLayout & layout
 {
 }
 
+Real
+ClusterContinuumFlux::absorptionSum(const Real * state,
+                                    const ClusterContinuumAbsorption & absorption) const
+{
+  Real sum = 0.0;
+  for (unsigned int n = 2; n <= _layout.switchSize(); ++n)
+    sum += absorption.discrete[n] * positive(state[n - 1]);
+  for (unsigned int k = 0; k < _layout.numCells(); ++k)
+    sum += absorption.center[k] * positive(state[_layout.cell(k).component]) * _layout.cell(k).width;
+  return sum;
+}
+
 void
 ClusterContinuumFlux::evaluate(const Real * state,
                                const ClusterContinuumCoefficients & coefficients,
+                               const ClusterContinuumOpposite * opposite,
                                std::vector<Flux> & flux) const
 {
   const unsigned int sw = _layout.switchSize();
@@ -64,6 +77,12 @@ ClusterContinuumFlux::evaluate(const Real * state,
 
   const Real monomer = positive(state[0]);
   const Real monomer_derivative = positiveDerivative(state[0]);
+
+  // The partner's monomer and the column of its Jacobian entries
+  const unsigned int partner_column = _layout.componentCount();
+  const Real partner_monomer = opposite ? positive(opposite->partner_state[0]) : 0.0;
+  const Real partner_monomer_derivative =
+      opposite ? positiveDerivative(opposite->partner_state[0]) : 0.0;
 
   // J_n = beta(n) C_1 C_n - alpha(n + 1) C_{n + 1} between the discrete sizes n and n + 1. The
   // size n + 1 sits in component n, which is the first cell for n = switch_size.
@@ -78,6 +97,16 @@ ClusterContinuumFlux::evaluate(const Real * state,
     f.add(0, beta * c_n * monomer_derivative);
     f.add(n - 1, beta * monomer * positiveDerivative(state[n - 1]));
     f.add(n, -alpha * positiveDerivative(state[n]));
+
+    // A cluster of size n + 1 that absorbs a partner monomer becomes size n: flux
+    // -beta_opposite(n + 1) C_partner,1 C_{n + 1} from n + 1 down to n
+    if (opposite)
+    {
+      const Real beta_opposite = opposite->own_absorption->discrete[n + 1];
+      f.value -= beta_opposite * partner_monomer * c_next;
+      f.add(n, -beta_opposite * partner_monomer * positiveDerivative(state[n]));
+      f.add(partner_column, -beta_opposite * c_next * partner_monomer_derivative);
+    }
   }
 
   // Slopes of the cell averages, limited so that no new extremum appears, and their derivatives
@@ -184,6 +213,44 @@ ClusterContinuumFlux::evaluate(const Real * state,
     f.add(right.component,
           (from_left ? 0.0 : drift * right_value_derivative) -
               0.5 * twice_diffusion_right * positiveDerivative(c_right) / spacing);
+
+    // Shrinking by the partner's monomers: drift -beta_opposite C_partner,1 (always toward smaller
+    // sizes, so the face value comes from the right cell) and diffusion beta_opposite C_partner,1 / 2.
+    // It has its own upwinding and shares the slopes.
+    if (opposite)
+    {
+      const ClusterContinuumAbsorption & absorption = *opposite->own_absorption;
+      const Real drift_opposite = -absorption.face[face] * partner_monomer;
+      const Real twice_diffusion_left_opposite = absorption.center[face - 1] * partner_monomer;
+      const Real twice_diffusion_right_opposite = absorption.center[face] * partner_monomer;
+
+      f.value += drift_opposite * right_value -
+                 0.5 *
+                     (twice_diffusion_right_opposite * positive(c_right) -
+                      twice_diffusion_left_opposite * positive(c_left)) /
+                     spacing;
+
+      const Real offset = x_face - right.center;
+      for (unsigned int i = 0; i < 3; ++i)
+      {
+        const int neighbor = static_cast<int>(face) - 1 + static_cast<int>(i);
+        if (neighbor >= 0 && neighbor < static_cast<int>(nc) && slope_partial[face][i] != 0.0)
+          f.add(_layout.cell(neighbor).component,
+                drift_opposite * positiveDerivative(right_inner) * offset * slope_partial[face][i]);
+      }
+      f.add(left.component,
+            0.5 * twice_diffusion_left_opposite * positiveDerivative(c_left) / spacing);
+      f.add(right.component,
+            drift_opposite * right_value_derivative -
+                0.5 * twice_diffusion_right_opposite * positiveDerivative(c_right) / spacing);
+      f.add(partner_column,
+            partner_monomer_derivative *
+                (-absorption.face[face] * right_value -
+                 0.5 *
+                     (absorption.center[face] * positive(c_right) -
+                      absorption.center[face - 1] * positive(c_left)) /
+                     spacing));
+    }
   }
 }
 
@@ -192,10 +259,11 @@ ClusterContinuumFlux::rate(const Real * state,
                            const ClusterContinuumCoefficients & coefficients,
                            Real generation,
                            Real sink,
-                           std::vector<Real> & rate) const
+                           std::vector<Real> & rate,
+                           const ClusterContinuumOpposite * opposite) const
 {
   std::vector<Flux> flux;
-  evaluate(state, coefficients, flux);
+  evaluate(state, coefficients, opposite, flux);
 
   const unsigned int sw = _layout.switchSize();
   const unsigned int nc = _layout.numCells();
@@ -221,16 +289,26 @@ ClusterContinuumFlux::rate(const Real * state,
     defect_rate += _layout.cell(k).first_moment * r;
   }
   rate[0] = generation - sink * positive(state[0]) - defect_rate;
+
+  if (opposite)
+  {
+    // The clusters that shrink by absorbing a partner monomer annihilate it, which costs the
+    // partner's monomer a point defect each, and the partner's clusters absorbing this family's
+    // monomer take that monomer
+    rate[0] -= positive(opposite->partner_state[0]) * absorptionSum(state, *opposite->own_absorption) +
+               positive(state[0]) * absorptionSum(opposite->partner_state, *opposite->partner_absorption);
+  }
 }
 
 void
 ClusterContinuumFlux::jacobian(const Real * state,
                                const ClusterContinuumCoefficients & coefficients,
                                Real sink,
-                               std::vector<Triplet> & triplets) const
+                               std::vector<Triplet> & triplets,
+                               const ClusterContinuumOpposite * opposite) const
 {
   std::vector<Flux> flux;
-  evaluate(state, coefficients, flux);
+  evaluate(state, coefficients, opposite, flux);
 
   const unsigned int sw = _layout.switchSize();
   const unsigned int nc = _layout.numCells();
@@ -238,7 +316,8 @@ ClusterContinuumFlux::jacobian(const Real * state,
 
   // Row r of -rate is minus the derivative of d C_r / dt; the monomer row is the same sum weighted
   // by the number of point defects each row holds, plus the sink.
-  std::vector<Real> monomer_row(_layout.componentCount(), 0.0);
+  const unsigned int partner_column = _layout.componentCount();
+  std::vector<Real> monomer_row(opposite ? 2 * partner_column : partner_column, 0.0);
   auto addRow = [&](unsigned int row, Real defects, Real scale, const Flux & into, const Flux * out)
   {
     for (unsigned int i = 0; i < into.count; ++i)
@@ -264,6 +343,34 @@ ClusterContinuumFlux::jacobian(const Real * state,
            k + 1 < nc ? &flux[fluxIntoCell(k + 1)] : nullptr);
 
   monomer_row[0] += sink * positiveDerivative(state[0]);
+
+  if (opposite)
+  {
+    // Derivative of the monomer's loss to shrinking and to the partner's absorption (see rate())
+    const Real own_monomer = positive(state[0]);
+    const Real partner_monomer = positive(opposite->partner_state[0]);
+    const ClusterContinuumAbsorption & own = *opposite->own_absorption;
+    const ClusterContinuumAbsorption & partner = *opposite->partner_absorption;
+    const Real * partner_state = opposite->partner_state;
+
+    monomer_row[0] += positiveDerivative(state[0]) * absorptionSum(partner_state, partner);
+    monomer_row[partner_column] +=
+        positiveDerivative(partner_state[0]) * absorptionSum(state, own);
+    for (unsigned int n = 2; n <= sw; ++n)
+    {
+      monomer_row[n - 1] += partner_monomer * own.discrete[n] * positiveDerivative(state[n - 1]);
+      monomer_row[partner_column + n - 1] +=
+          own_monomer * partner.discrete[n] * positiveDerivative(partner_state[n - 1]);
+    }
+    for (unsigned int k = 0; k < nc; ++k)
+    {
+      const unsigned int c = _layout.cell(k).component;
+      const Real width = _layout.cell(k).width;
+      monomer_row[c] += partner_monomer * own.center[k] * width * positiveDerivative(state[c]);
+      monomer_row[partner_column + c] +=
+          own_monomer * partner.center[k] * width * positiveDerivative(partner_state[c]);
+    }
+  }
   for (unsigned int c = 0; c < monomer_row.size(); ++c)
     if (monomer_row[c] != 0.0 || c == 0)
       triplets.push_back({0, c, monomer_row[c]});
