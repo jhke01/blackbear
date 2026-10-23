@@ -1,0 +1,17 @@
+[Tests]
+  [continuum_loop_jacobian]
+    type = PetscJacobianTester
+    input = continuum_loop_jacobian.i
+    run_sim = True
+    ratio_tol = 1e-7
+    design = 'ContinuumLoopNodalKernel.md'
+    requirement = 'BlackBear shall provide a Jacobian for the discrete-plus-continuum loop kernel, including the dependence of the minmod-limited face values on the neighboring cells, that agrees with a finite difference of its residual.'
+  []
+  [continuum_loop_transient]
+    type = CSVDiff
+    input = continuum_loop_transient.i
+    csvdiff = 'continuum_loop_transient_out.csv'
+    design = 'ContinuumLoopNodalKernel.md'
+    requirement = 'BlackBear shall integrate a loop family that is discrete up to a switch size and a Fokker-Planck continuum above it, so that the monomer concentration agrees with an independent CVODE integration of the same rate function to better than 0.1 percent.'
+  []
+[]
