@@ -15,7 +15,6 @@
 #include "ContinuumLoopNodalKernel.h"
 
 #include "FEProblemBase.h"
-#include "Function.h"
 
 #include "libmesh/utility.h"
 
@@ -37,19 +36,8 @@ ContinuumLoopNodalKernel::validParams()
       "Section 4.1), optionally with the shrinking by and the loss of monomers of the opposite "
       "point-defect type.");
 
-  params.addRequiredParam<Real>(
-      "generation",
-      "Total point-defect production rate [site fraction/s]. The fraction 1 - f2 - f3 - f4 of it "
-      "is produced as monomers.");
-  params.addParam<Real>("cascade_f2", 0.0, "Fraction of the production that is made as dimers.");
-  params.addParam<Real>("cascade_f3", 0.0, "Fraction of the production that is made as trimers.");
-  params.addParam<Real>(
-      "cascade_f4", 0.0, "Fraction of the production that is made as clusters of 4.");
+  params.addRequiredParam<Real>("generation", "Monomer generation rate G_1 [1/s].");
   params.addParam<Real>("sink", 0.0, "Linear sink coefficient of the monomer, k_s [1/s].");
-  params.addParam<FunctionName>("sink_function",
-                                "1",
-                                "Function of time that multiplies sink, for a sink strength that "
-                                "changes in time such as recovering dislocations.");
   params.addRequiredParam<Real>("temperature", "Temperature T [K].");
   params.addRequiredParam<Real>("atomic_volume", "Atomic volume V_at [m^3].");
   params.addRequiredParam<Real>("lattice_parameter", "Lattice parameter a0 [m].");
@@ -115,13 +103,7 @@ ContinuumLoopNodalKernel::validParams()
 ContinuumLoopNodalKernel::ContinuumLoopNodalKernel(const InputParameters & parameters)
   : ArrayNodalKernel(parameters),
     _generation(getParam<Real>("generation")),
-    _cascade_fraction{1.0 - getParam<Real>("cascade_f2") - getParam<Real>("cascade_f3") -
-                          getParam<Real>("cascade_f4"),
-                      getParam<Real>("cascade_f2"),
-                      getParam<Real>("cascade_f3"),
-                      getParam<Real>("cascade_f4")},
-    _base_sink(getParam<Real>("sink")),
-    _sink_function(getFunction("sink_function")),
+    _sink(getParam<Real>("sink")),
     _temperature(getParam<Real>("temperature")),
     _atomic_volume(getParam<Real>("atomic_volume")),
     _lattice_parameter(getParam<Real>("lattice_parameter")),
@@ -157,11 +139,6 @@ ContinuumLoopNodalKernel::ContinuumLoopNodalKernel(const InputParameters & param
 {
   if (_temperature <= 0.0)
     paramError("temperature", "must be positive.");
-  if (_cascade_fraction[0] < 0.0 || _cascade_fraction[1] < 0.0 || _cascade_fraction[2] < 0.0 ||
-      _cascade_fraction[3] < 0.0)
-    mooseError(type(), " requires cascade_f2, cascade_f3 and cascade_f4 >= 0 with a sum of at most 1.");
-  if (_layout.switchSize() < 4)
-    mooseError(type(), " requires switch_size >= 4 so that the cascade source is discrete.");
   if (_atomic_volume <= 0.0 || _lattice_parameter <= 0.0 || _burgers_vector <= 0.0)
     mooseError(type(), " requires atomic_volume, lattice_parameter and burgers_vector > 0.");
   if (_energy_exponent <= 0.0 || _energy_coefficient_eV <= 0.0)
@@ -202,12 +179,6 @@ ContinuumLoopNodalKernel::biasFactor(
   Real bias = std::sqrt(burgers / (8.0 * libMesh::pi * _lattice_parameter)) * z_loop - z;
   bias *= std::pow(1.0 / static_cast<Real>(n), 0.5 * alpha_exponent);
   return bias + z;
-}
-
-Real
-ContinuumLoopNodalKernel::currentSink() const
-{
-  return _base_sink * _sink_function.value(_t, *_current_node);
 }
 
 Real
@@ -293,14 +264,10 @@ ContinuumLoopNodalKernel::computeQpResidual(RealEigenVector & residual)
     opposite.partner_state = &_opposite_array[_qp](0);
   _flux.rate(&_u[_qp](0),
              _coefficients,
-             _generation * _cascade_fraction[0],
-             currentSink(),
+             _generation,
+             _sink,
              _rate,
              _opposite_active ? &opposite : nullptr);
-  // A cluster of size n made in a cascade carries n point defects, so the production fraction f_n
-  // makes f_n / n clusters
-  for (const auto n : make_range(2u, 5u))
-    _rate[n - 1] += _generation * _cascade_fraction[n - 1] / static_cast<Real>(n);
   residual.resize(_count);
   for (const auto i : make_range(_count))
     residual(i) = -_rate[i];
@@ -315,7 +282,7 @@ ContinuumLoopNodalKernel::computeQpJacobian()
     opposite.partner_state = &_opposite_array[_qp](0);
   _flux.jacobian(&_u[_qp](0),
                  _coefficients,
-                 currentSink(),
+                 _sink,
                  _triplets,
                  _opposite_active ? &opposite : nullptr);
   for (const auto & t : _triplets)
@@ -332,7 +299,7 @@ ContinuumLoopNodalKernel::computeQpOffDiagJacobian(unsigned int jvar)
   ensureCoefficients();
   ClusterContinuumOpposite opposite{
       &_own_absorption, &_partner_absorption, &_opposite_array[_qp](0)};
-  _flux.jacobian(&_u[_qp](0), _coefficients, currentSink(), _triplets, &opposite);
+  _flux.jacobian(&_u[_qp](0), _coefficients, _sink, _triplets, &opposite);
   for (const auto & t : _triplets)
     if (t.column >= _count)
       setJacobian(t.row, t.column - _count, t.value);
