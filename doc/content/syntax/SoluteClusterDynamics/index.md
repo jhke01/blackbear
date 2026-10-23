@@ -123,9 +123,12 @@ The continuum is useful where the memory of the grouped array matters: the cost 
 with the square of the number of unknowns of all the arrays of the problem, and the continuum needs far fewer
 unknowns for the same accuracy of the point-defect populations of [DefectDynamics/index.md]. For the Cu
 precipitation benchmark with 100,000 sizes, which the grouped array already represents with 338 unknowns, the
-continuum (311 to 584 unknowns) needs about the same memory and time (30 MB, 2 s), and it follows the SUNDIALS
-reference more closely over the run: the median deviation after 1 s is 1.7 percent in the monomer, 4.3 percent in
-the density and 1.4 percent in the radius, against 3.7, 9.1 and 5.3 percent for the grouped array.
+continuum (311 to 584 unknowns) needs about the same memory (0.03 to 0.04 GB). The two schemes are equally
+accurate once the time step is controlled: with the step limited to $0.005\,t + 10^{-4}$ s, both agree with the
+SUNDIALS reference to within 0.4 percent (grouped) and 1.3 percent (continuum) in the density, and 0.2 and 0.4
+percent in the radius, for 3095 steps; the continuum is about 6.5 times faster (21 s against 140 s). With the
+default `IterationAdaptiveDT` alone, both are off by a factor of 3 in the density at 0.01 s and by 18 percent at
+1 s, because the steps are too large for the early rise of the cluster density.
 
 ## Example Input Syntax
 
