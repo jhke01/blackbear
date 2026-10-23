@@ -18,6 +18,8 @@
 #include "ClusterContinuumFlux.h"
 #include "ClusterContinuumLayout.h"
 
+#include <array>
+
 /**
  * Self-absorption and thermal emission of a family of two-dimensional loops whose size
  * distribution is discrete up to switch_size and a Fokker-Planck continuum above it (Pokor et al.
@@ -50,6 +52,9 @@ protected:
   /// Emission coefficient alpha(n) = beta(n - 1) exp(-E_b(n) / kT), n >= 2
   Real alpha(unsigned int n) const;
 
+  /// Linear sink coefficient of the monomer at the current time
+  Real currentSink() const;
+
   /// Rate coefficient at which this family's loops absorb a monomer of the opposite type, 2 pi r(n)
   /// Z_opposite(n) D_opposite / V_at, with this family's radius
   Real oppositeBeta(unsigned int n) const;
@@ -65,7 +70,10 @@ protected:
   void ensureCoefficients();
 
   const Real _generation;
-  const Real _sink;
+  /// Fractions f_1 .. f_4 of the production made as clusters of 1 .. 4 point defects
+  const std::array<Real, 4> _cascade_fraction;
+  const Real _base_sink;
+  const Function & _sink_function;
   const Real _temperature;
   const Real _atomic_volume;
   const Real _lattice_parameter;
