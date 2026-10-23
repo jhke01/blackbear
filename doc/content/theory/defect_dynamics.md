@@ -27,6 +27,10 @@ equations reproduce the ungrouped ones exactly in the limit of unit-width
 bins and remain accurate for much wider bins than a single-moment grouping
 would allow [!citep](golubov2001).
 
+Each family has its own grouping (whether to group, how many explicit sizes, the bin spacing and
+growth ratio), so a coarse grid for the voids and a fine grid for the loops is simply a different
+value on each species; see [DefectDynamics/index.md].
+
 Three physical processes couple or drive the two distributions:
 
 - +Self-absorption and thermal emission+ -- a monomer of the same species is
@@ -319,6 +323,28 @@ activates cascade seeding simply by setting $f_2 + f_3 + f_4 > 0$ on its own sub
 separate switch. Like dislocation recovery above, this term depends only on constants, not on the
 solution, so its Jacobian contribution is exactly zero and the kernel is AD-safe.
 
+## Coupling to Solute Clustering
+
+[SoluteClusterDynamics/index.md] describes a third population, solute clusters such as Cu precipitates,
+handled by [GenericClusterDynamicsGroupedNodalKernel.md]. In a vacancy-mediated alloy the solute monomer
+moves only by exchanging with a vacancy, so irradiation speeds its diffusion up in proportion to how
+far the vacancy monomer concentration $C_{v,1}$ is above its thermal-equilibrium value
+$C_v^{th} = 4\exp(-E_f/k_BT)$:
+
+!equation
+D_s = D_s^{0}\,f_{rad}\,\frac{C_{v,1}}{C_v^{th}},
+
+where $D_s^{0}$ is the solute monomer diffusivity without irradiation and $f_{rad}$ the optional static
+enhancement factor (leave it at 1 when the live ratio is used, or the effect is counted twice). The
+ratio $C_{v,1}/C_v^{th}$ is the vacancy supersaturation. It is read from component 0 of the vacancy
+species' array, so it does not depend on that species' grouping. The coupling is one-way: the vacancy
+balance does not feel the solute. Because $D_s$ appears in every rate coefficient of the solute
+equations, each solute equation depends on $C_{v,1}$; the kernel provides this off-diagonal Jacobian
+block, which MOOSE uses only for variable pairs named in the preconditioner (see
+[GenericClusterDynamicsNodalKernel.md]). The thermal concentration is evaluated at the solute block's
+temperature, which must equal the temperature of the `[DefectDynamics]` block, and the coupling has an
+effect only for `rate_model = interfacial_energy`, the model that uses the monomer diffusivity.
+
 ## Numerical Considerations id=numerical-considerations
 
 Two numerical-accuracy pitfalls are easy to hit when setting up a new case
@@ -336,6 +362,22 @@ and temperature -- so a case should check its own final average cluster size
 against its cap and increase the cap (and, if using geometric grouping, the
 number of bins needed to reach it) whenever that average approaches a
 sizable fraction of the cap.
+
+### Ungrouped Species and the Cost of the Cross-Species Block
+
+A species with `use_grouping = false` gives every cluster size its own unknown. The direct solve
+and MOOSE's storage for the Jacobian grow much faster than linearly with the number of unknowns,
+so the action refuses an ungrouped species with more than 3000 sizes. Declaring the coupling
+between the two species' arrays in the preconditioner (needed for the exact cross-species
+Jacobian of opposite-species absorption and of recombination) makes MOOSE allocate a block of
+storage for every pair of components of the two arrays. In a measured case with the void and loop
+arrays at 1000 sizes each (about 1070 components in all, with grouping), declaring the pair raised
+the peak process memory from about 0.1 GB to about 2.0 GB, and an allocation profile put most of
+the extra memory in MOOSE's `Assembly::init`, in vectors of dense matrices. Without
+the cross-species block the Newton iteration uses an approximate Jacobian for the coupling
+between the families. It still converges to the same residual, but takes more nonlinear iterations
+in the cases tried. For production-size problems the choice is between the full Jacobian and the
+memory.
 
 ### Timestep Resolution Through the Nucleation Transient
 
@@ -360,4 +402,6 @@ run must resolve a sharp nucleation transient, at the cost of more steps
 - [GenericCascadeSpectrumNodalKernel.md]
 - [GenericClusterDynamicsGroupedNodalKernel.md]
 - [GenericClusterDynamicsNodalKernel.md]
+- [SoluteClusterDynamics/index.md]
+- [DefectDynamics/index.md]
 - [GroupedArrayFunctionIndexIC.md]
