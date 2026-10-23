@@ -7,6 +7,17 @@
     design = 'ContinuumLoopNodalKernel.md'
     requirement = 'BlackBear shall provide a Jacobian for the discrete-plus-continuum loop kernel, including the dependence of the minmod-limited face values on the neighboring cells, that agrees with a finite difference of its residual.'
   []
+  [continuum_pair_jacobian]
+    type = PetscJacobianTester
+    input = continuum_pair_jacobian.i
+    run_sim = True
+    ratio_tol = 1e-7
+    # The entries are of order 1e10 (the monomer rows hold the loop absorption rates), so a relative
+    # difference of 1e-9 is an absolute Frobenius difference of order 1e5, far above the default of 1
+    difference_tol = 1e6
+    design = 'ContinuumLoopNodalKernel.md'
+    requirement = 'BlackBear shall provide a Jacobian, including the off-diagonal blocks, for two coupled discrete-plus-continuum loop families that shrink by absorbing each other\'s monomers, that agrees with a finite difference of the residual.'
+  []
   [continuum_loop_transient]
     type = CSVDiff
     input = continuum_loop_transient.i

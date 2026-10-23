@@ -27,9 +27,11 @@
  * capillary-law binding energy. The array variable has one component for the monomer, one for
  * each discrete size 2 .. switch_size, and one for each continuum cell (ClusterContinuumLayout).
  *
- * This version has no opposite-species terms, so it is the one-family model. Choose a largest size
- * N that leaves the distribution room to grow: the flux out of the last cell is zero, so a
- * population that reaches it piles up there.
+ * With opposite_coupled_var, the loops also shrink by absorbing a monomer of the other point-defect
+ * type (Pokor et al. 2004, Eqs. 2 and 3), and the two monomer balances lose what the other family
+ * absorbs. Both families must use the same layout parameters. Without it this is the one-family
+ * model. Choose a largest size N that leaves the distribution room to grow: the flux out of the
+ * last cell is zero, so a population that reaches it piles up there.
  */
 class ContinuumLoopNodalKernel : public ArrayNodalKernel
 {
@@ -40,12 +42,24 @@ public:
 protected:
   virtual void computeQpResidual(RealEigenVector & residual) override;
   virtual void computeQpJacobian() override;
+  virtual void computeQpOffDiagJacobian(unsigned int jvar) override;
 
   /// Loop absorption coefficient beta(n) for a monomer, 2 pi r(n) Z(n) D / V_at
   Real beta(unsigned int n) const;
 
   /// Emission coefficient alpha(n) = beta(n - 1) exp(-E_b(n) / kT), n >= 2
   Real alpha(unsigned int n) const;
+
+  /// Rate coefficient at which this family's loops absorb a monomer of the opposite type, 2 pi r(n)
+  /// Z_opposite(n) D_opposite / V_at, with this family's radius
+  Real oppositeBeta(unsigned int n) const;
+
+  /// Rate coefficient at which the opposite family's loops absorb this family's monomer, with the
+  /// opposite family's radius and this family's bias and diffusivity
+  Real partnerBeta(unsigned int n) const;
+
+  /// Bias factor Z(n) = Z + [sqrt(b / (8 pi a0)) Z_loop - Z] n^(-alpha / 2) for a Burgers vector b
+  Real biasFactor(unsigned int n, Real burgers, Real z, Real z_loop, Real alpha_exponent) const;
 
   /// Fill the coefficients on first use
   void ensureCoefficients();
@@ -65,10 +79,20 @@ protected:
   const Real _energy_coefficient_eV;
   const Real _energy_constant_eV;
 
+  const bool _opposite_active;
+  const Real _opposite_diffusivity;
+  const Real _opposite_burgers_vector;
+  const Real _opposite_z;
+  const Real _opposite_z_loop;
+  const Real _opposite_alpha;
+  const ArrayVariableValue & _opposite_array;
+  const unsigned int _opposite_var_num;
+
   const ClusterContinuumLayout _layout;
   const ClusterContinuumFlux _flux;
 
   ClusterContinuumCoefficients _coefficients;
+  ClusterContinuumAbsorption _own_absorption, _partner_absorption;
   bool _have_coefficients = false;
   std::vector<Real> _rate;
   std::vector<ClusterContinuumFlux::Triplet> _triplets;

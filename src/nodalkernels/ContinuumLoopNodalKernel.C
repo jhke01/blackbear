@@ -14,6 +14,8 @@
 
 #include "ContinuumLoopNodalKernel.h"
 
+#include "FEProblemBase.h"
+
 #include "libmesh/utility.h"
 
 registerMooseObject("BlackBearApp", ContinuumLoopNodalKernel);
@@ -30,8 +32,9 @@ ContinuumLoopNodalKernel::validParams()
   InputParameters params = ArrayNodalKernel::validParams();
   params.addClassDescription(
       "Absorption and emission of two-dimensional loops whose size distribution is discrete up "
-      "to switch_size and a Fokker-Planck finite-volume continuum above it, for one family "
-      "without opposite-species terms (Pokor et al. 2004, Section 4.1).");
+      "to switch_size and a Fokker-Planck finite-volume continuum above it (Pokor et al. 2004, "
+      "Section 4.1), optionally with the shrinking by and the loss of monomers of the opposite "
+      "point-defect type.");
 
   params.addRequiredParam<Real>("generation", "Monomer generation rate G_1 [1/s].");
   params.addParam<Real>("sink", 0.0, "Linear sink coefficient of the monomer, k_s [1/s].");
@@ -64,6 +67,36 @@ ContinuumLoopNodalKernel::validParams()
                         "Reconstruct the cell values at a face with a minmod-limited slope "
                         "(second order, as in the SUNDIALS Pokor benchmark). If false the cell "
                         "averages are used (first-order upwind).");
+
+  params.addCoupledVar("opposite_coupled_var",
+                       0.0,
+                       "The other point-defect family's array variable, which must use the same "
+                       "num_cluster_sizes, switch_size and cell widths. Optional: when absent the "
+                       "opposite-species terms are inactive.");
+  params.addParam<Real>("opposite_D0",
+                        0.0,
+                        "Diffusion prefactor of the opposite monomer [m^2/s] (needed with "
+                        "opposite_coupled_var).");
+  params.addParam<Real>("opposite_Em_eV",
+                        0.0,
+                        "Migration energy of the opposite monomer [eV] (needed with "
+                        "opposite_coupled_var).");
+  params.addParam<Real>("opposite_Z",
+                        1.0,
+                        "Large-loop limit of the bias of this family's loops for capturing the "
+                        "opposite monomer.");
+  params.addParam<Real>("opposite_Z_loop",
+                        1.0,
+                        "Small-loop coefficient of the bias of this family's loops for capturing "
+                        "the opposite monomer.");
+  params.addParam<Real>("opposite_alpha",
+                        1.0,
+                        "Exponent of the approach of that bias to opposite_Z with size.");
+  params.addParam<Real>("opposite_burgers_vector",
+                        0.0,
+                        "Burgers vector of the opposite family's loops [m], which sets their "
+                        "radius when they absorb this family's monomer. Defaults to burgers_vector "
+                        "when zero.");
   return params;
 }
 
@@ -86,6 +119,18 @@ ContinuumLoopNodalKernel::ContinuumLoopNodalKernel(const InputParameters & param
     _energy_exponent(getParam<Real>("energy_exponent")),
     _energy_coefficient_eV(getParam<Real>("energy_coefficient_eV")),
     _energy_constant_eV(getParam<Real>("energy_constant_eV")),
+    _opposite_active(isCoupled("opposite_coupled_var")),
+    _opposite_diffusivity(
+        getParam<Real>("opposite_D0") *
+        std::exp(-getParam<Real>("opposite_Em_eV") * continuum_eV / (continuum_kB * _temperature))),
+    _opposite_burgers_vector(getParam<Real>("opposite_burgers_vector") != 0.0
+                                 ? getParam<Real>("opposite_burgers_vector")
+                                 : _burgers_vector),
+    _opposite_z(getParam<Real>("opposite_Z")),
+    _opposite_z_loop(getParam<Real>("opposite_Z_loop")),
+    _opposite_alpha(getParam<Real>("opposite_alpha")),
+    _opposite_array(coupledArrayValue("opposite_coupled_var")),
+    _opposite_var_num(coupled("opposite_coupled_var")),
     _layout(getParam<unsigned int>("num_cluster_sizes"),
             getParam<unsigned int>("switch_size"),
             getParam<Real>("continuum_initial_width"),
@@ -105,6 +150,58 @@ ContinuumLoopNodalKernel::ContinuumLoopNodalKernel(const InputParameters & param
                " array components from the layout, but the variable has ",
                _count,
                ".");
+
+  if (_opposite_active)
+  {
+    if (_opposite_var_num == _var.number())
+      paramError("opposite_coupled_var", "must be the other point-defect family's variable.");
+    if (getParam<Real>("opposite_D0") <= 0.0)
+      paramError("opposite_D0", "must be positive when opposite_coupled_var is given.");
+    const unsigned int opposite_count = getArrayVar("opposite_coupled_var", 0)->count();
+    if (opposite_count != _count)
+      paramError("opposite_coupled_var",
+                 "has ",
+                 opposite_count,
+                 " components but this variable has ",
+                 _count,
+                 "; the two families must use the same layout.");
+    // The Jacobian has entries in every row of the monomer and in the shrink fluxes, outside the
+    // diagonal blocks of the default pattern
+    if (!_fe_problem.useHashTableMatrixAssembly())
+      mooseError(type(), " with opposite_coupled_var requires Problem/use_hash_table_matrix_assembly = true");
+  }
+}
+
+Real
+ContinuumLoopNodalKernel::biasFactor(
+    unsigned int n, Real burgers, Real z, Real z_loop, Real alpha_exponent) const
+{
+  Real bias = std::sqrt(burgers / (8.0 * libMesh::pi * _lattice_parameter)) * z_loop - z;
+  bias *= std::pow(1.0 / static_cast<Real>(n), 0.5 * alpha_exponent);
+  return bias + z;
+}
+
+Real
+ContinuumLoopNodalKernel::oppositeBeta(unsigned int n) const
+{
+  if (n == 0)
+    return 0.0;
+  const Real radius =
+      std::sqrt(static_cast<Real>(n) * _atomic_volume / (libMesh::pi * _burgers_vector));
+  return 2.0 * libMesh::pi * radius *
+         biasFactor(n, _burgers_vector, _opposite_z, _opposite_z_loop, _opposite_alpha) *
+         _opposite_diffusivity / _atomic_volume;
+}
+
+Real
+ContinuumLoopNodalKernel::partnerBeta(unsigned int n) const
+{
+  if (n == 0)
+    return 0.0;
+  const Real radius =
+      std::sqrt(static_cast<Real>(n) * _atomic_volume / (libMesh::pi * _opposite_burgers_vector));
+  return 2.0 * libMesh::pi * radius * biasFactor(n, _burgers_vector, _z, _z_loop, _alpha_loop) *
+         _diffusivity / _atomic_volume;
 }
 
 Real
@@ -150,6 +247,11 @@ ContinuumLoopNodalKernel::ensureCoefficients()
       _layout,
       [this](unsigned int n) { return beta(n); },
       [this](unsigned int n) { return alpha(n); });
+  if (_opposite_active)
+  {
+    _own_absorption.build(_layout, [this](unsigned int n) { return oppositeBeta(n); });
+    _partner_absorption.build(_layout, [this](unsigned int n) { return partnerBeta(n); });
+  }
   _have_coefficients = true;
 }
 
@@ -157,7 +259,15 @@ void
 ContinuumLoopNodalKernel::computeQpResidual(RealEigenVector & residual)
 {
   ensureCoefficients();
-  _flux.rate(&_u[_qp](0), _coefficients, _generation, _sink, _rate);
+  ClusterContinuumOpposite opposite{&_own_absorption, &_partner_absorption, nullptr};
+  if (_opposite_active)
+    opposite.partner_state = &_opposite_array[_qp](0);
+  _flux.rate(&_u[_qp](0),
+             _coefficients,
+             _generation,
+             _sink,
+             _rate,
+             _opposite_active ? &opposite : nullptr);
   residual.resize(_count);
   for (const auto i : make_range(_count))
     residual(i) = -_rate[i];
@@ -167,7 +277,30 @@ void
 ContinuumLoopNodalKernel::computeQpJacobian()
 {
   ensureCoefficients();
-  _flux.jacobian(&_u[_qp](0), _coefficients, _sink, _triplets);
+  ClusterContinuumOpposite opposite{&_own_absorption, &_partner_absorption, nullptr};
+  if (_opposite_active)
+    opposite.partner_state = &_opposite_array[_qp](0);
+  _flux.jacobian(&_u[_qp](0),
+                 _coefficients,
+                 _sink,
+                 _triplets,
+                 _opposite_active ? &opposite : nullptr);
   for (const auto & t : _triplets)
-    setJacobian(t.row, t.column, t.value);
+    if (t.column < _count)
+      setJacobian(t.row, t.column, t.value);
+}
+
+void
+ContinuumLoopNodalKernel::computeQpOffDiagJacobian(unsigned int jvar)
+{
+  if (!_opposite_active || jvar != _opposite_var_num)
+    return;
+
+  ensureCoefficients();
+  ClusterContinuumOpposite opposite{
+      &_own_absorption, &_partner_absorption, &_opposite_array[_qp](0)};
+  _flux.jacobian(&_u[_qp](0), _coefficients, _sink, _triplets, &opposite);
+  for (const auto & t : _triplets)
+    if (t.column >= _count)
+      setJacobian(t.row, t.column - _count, t.value);
 }
