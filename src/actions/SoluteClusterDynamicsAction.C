@@ -37,8 +37,8 @@ SoluteClusterDynamicsAction::validParams()
                                  "interfacial_energy");
   MooseEnum group_spacing("linear geometric", "linear");
   params.addClassDescription(
-      "A front end to the solute-clustering ('Cu-precipitation') kernel, "
-      "ClusterDynamicsGroupedNodalKernel: builds the solute array variable, initial condition, "
+      "A front end to ClusterDynamicsGroupedNodalKernel, the solute-clustering kernel (used for "
+      "Cu precipitation, for example): builds the solute array variable, initial condition, "
       "time-derivative/dynamics kernel, and monomer/total-density postprocessors from the "
       "physical parameters below instead of requiring [GroupedVariables]/[NodalKernels] to be "
       "hand-typed. When a [DefectDynamics] block is also present in the same input, this action "
@@ -342,6 +342,19 @@ SoluteClusterDynamicsAction::actAddNodalKernels()
   const auto * vacancy = findVacancySpecies();
   if (vacancy)
   {
+    // The vacancy supersaturation C_v / C_v_thermal divides the live vacancy concentration, which
+    // [DefectDynamics] computes at its temperature, by the thermal value, which the solute kernel
+    // evaluates at its own. Two temperatures would make the ratio wrong at equilibrium.
+    const Real defect_temperature =
+        _awh.getActions<DefectDynamicsAction>().front()->getParam<Real>("temperature");
+    if (getParam<MooseEnum>("rate_model") == "interfacial_energy" &&
+        getParam<Real>("temperature") != defect_temperature)
+      paramError("temperature",
+                 "must equal the [DefectDynamics] temperature (",
+                 defect_temperature,
+                 " K) when the solute is coupled to its vacancies, but it is ",
+                 getParam<Real>("temperature"),
+                 " K.");
     params.set<std::vector<VariableName>>("vacancy_coupled_var") = {
         DefectDynamicsAction::variableName(*vacancy)};
     Real A, C, formation_energy_eV;

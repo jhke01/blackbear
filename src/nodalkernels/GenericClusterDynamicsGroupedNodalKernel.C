@@ -253,6 +253,15 @@ GenericClusterDynamicsGroupedNodalKernelTempl<is_ad>::GenericClusterDynamicsGrou
       this->template getParam<Real>("vacancy_formation_energy_eV") <= 0.0)
     mooseError("ClusterDynamicsGroupedNodalKernel requires vacancy_formation_energy_eV > 0 when "
               "vacancy_coupled_var is given.");
+  if (_vacancy_coupling_active)
+  {
+    // The coupling scales the monomer diffusivity, which rate_model = simple never reads, so it
+    // would otherwise be silently inert.
+    if (_rate_model == RateModel::SIMPLE)
+      this->paramWarning("vacancy_coupled_var",
+                         "has no effect with rate_model = simple, which does not use the monomer "
+                         "diffusivity. Use rate_model = interfacial_energy.");
+  }
 
   // radiation_enhanced_factor and vacancy_coupled_var both multiply the SAME monomer
   // diffusivity: a nonzero vacancy supersaturation ratio (S_v = C_v(1,t)/C_v_thermal) is itself

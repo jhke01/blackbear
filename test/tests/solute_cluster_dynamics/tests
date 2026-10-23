@@ -19,4 +19,19 @@
     expect_err = 'found more than one geometry = void species in the \[DefectDynamics\] block; the vacancy species to couple to is ambiguous'
     requirement = 'BlackBear shall error when a [SoluteClusterDynamics] block cannot unambiguously identify which species in a [DefectDynamics] block is the vacancy species to couple to, rather than silently picking one.'
   []
+  [solute_defect_temperature_mismatch_error]
+    type = RunException
+    input = solute_defect_coupled_action.i
+    cli_args = "SoluteClusterDynamics/temperature=700"
+    expect_err = "when the solute is coupled to its vacancies"
+    requirement = 'BlackBear shall error when a [SoluteClusterDynamics] block that is coupled to the vacancies of a [DefectDynamics] block has a different temperature, since the vacancy supersaturation would then be evaluated at two temperatures.'
+  []
+  [solute_defect_simple_rate_model_warning]
+    type = RunException
+    input = solute_defect_coupled_action.i
+    cli_args = "SoluteClusterDynamics/rate_model=simple SoluteClusterDynamics/beta0=1 SoluteClusterDynamics/alpha0=1"
+    expect_err = "has no effect with rate_model = simple"
+    allow_warnings = false
+    requirement = 'BlackBear shall warn when vacancy_coupled_var is given with rate_model = simple, because that model never reads the monomer diffusivity the coupling scales.'
+  []
 []

@@ -203,8 +203,10 @@ DefectSpeciesAction::validParams()
       "cascade_f2",
       0.0,
       "Fraction of this species' generation rate seeded directly as dimers (cluster size 2) "
-      "instead of monomers (Pokor et al. 2004, Eq 1). Only has an effect when the enclosing "
-      "DefectDynamics block has a [Cascade] sub-block; see cascade_f3, cascade_f4.");
+      "instead of monomers (Pokor et al. 2004, Eq 1). A nonzero cascade_f2, cascade_f3 or "
+      "cascade_f4 turns cascade seeding on for this species, and the monomer then receives the "
+      "rest of the generation rate. Cascade seeding needs sizes 2 to 4 to be explicit array "
+      "components, so the species must have explicit_max >= 4. See cascade_f3, cascade_f4.");
   params.addParam<Real>(
       "cascade_f3",
       0.0,
@@ -223,6 +225,10 @@ namespace
 {
 /// Largest num_cluster_sizes for a species that does not group its array.
 constexpr unsigned int max_ungrouped_cluster_sizes = 3000;
+
+/// Largest cluster size a radius may be converted to. The kernels build arrays of this length on
+/// every call, so a size near the limit of an unsigned int would be out of reach anyway.
+constexpr Real max_cluster_size_from_radius = 1.0e9;
 
 bool
 checkCapillaryInputPair(const InputParameters & params)
@@ -274,6 +280,12 @@ DefectSpeciesAction::DefectSpeciesAction(const InputParameters & params)
     paramWarning("burgers_vector",
                 "burgers_vector has no effect for geometry = void: only a loop's radius and "
                 "bias laws use it.");
+
+  if (parameters().isParamSetByUser("max_cluster_radius_m") &&
+      getParam<Real>("max_cluster_radius_m") <= 0.0)
+    paramError("max_cluster_radius_m", "must be positive.");
+  if (getParam<Real>("resolvable_radius") < 0.0)
+    paramError("resolvable_radius", "must not be negative; leave it at zero to turn it off.");
 
   const Real cascade_f2 = getParam<Real>("cascade_f2");
   const Real cascade_f3 = getParam<Real>("cascade_f3");
@@ -349,7 +361,20 @@ DefectSpeciesAction::monomerRadiusLaw(
 unsigned int
 DefectSpeciesAction::clusterSizeFromRadius(Real radius, Real r1, Real radius_exponent)
 {
-  return static_cast<unsigned int>(std::ceil(std::pow(radius / r1, 1.0 / radius_exponent)));
+  // Converting a double that does not fit an unsigned int is undefined behavior (and, for a large
+  // radius, ends in an allocation of billions of sizes), so reject it with a message instead.
+  const Real size = std::ceil(std::pow(radius / r1, 1.0 / radius_exponent));
+  if (!std::isfinite(size) || size < 1.0 || size > max_cluster_size_from_radius)
+    ::mooseError("A radius of ",
+                 radius,
+                 " m corresponds to ",
+                 size,
+                 " point defects with a monomer radius of ",
+                 r1,
+                 " m; it must correspond to between 1 and ",
+                 max_cluster_size_from_radius,
+                 ".");
+  return static_cast<unsigned int>(size);
 }
 
 unsigned int
@@ -364,6 +389,13 @@ DefectSpeciesAction::resolvedNumClusterSizes(Real atomic_volume, Real lattice_pa
     monomerRadiusLaw(atomic_volume, lattice_parameter, r1, radius_exponent);
     n = clusterSizeFromRadius(getParam<Real>("max_cluster_radius_m"), r1, radius_exponent);
   }
+
+  // The monomer-row balance reads the dimer, so a species needs at least sizes 1 and 2.
+  if (n < 2)
+    paramError(_uses_direct_cluster_size_count ? "num_cluster_sizes" : "max_cluster_radius_m",
+               "a species needs at least 2 cluster sizes, but this one has ",
+               n,
+               ".");
 
   // Without grouping every size is an unknown, and both the direct solve and the assembly storage
   // grow much faster than linearly with the unknown count, so a very large ungrouped species would

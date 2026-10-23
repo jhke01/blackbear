@@ -190,6 +190,8 @@ GenericInterstitialLoopGroupedNodalKernelTempl<
     mooseError(this->type(), " requires D0_i > 0.");
   if (_Q <= 0.0)
     mooseError(this->type(), " requires Em_i_eV > 0.");
+  if (_opposite_burgers_vector <= 0.0)
+    this->paramError("opposite_burgers_vector", "must be positive, or zero to use burgers_vector.");
   if (_atomic_volume <= 0.0)
     mooseError(this->type(), " requires atomic_volume > 0.");
   if (_burgers_vector <= 0.0)

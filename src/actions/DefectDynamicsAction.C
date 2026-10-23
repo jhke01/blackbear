@@ -82,9 +82,10 @@ DefectDynamicsAction::validParams()
       "dislocation_density",
       0.0,
       "Dislocation density rho [m^-2] for the background sink, sink = D*Z*rho, applied to every "
-      "species' monomer. Required unless a [Recovery] sub-block is given, in which case this "
-      "species' sink instead comes entirely from the time-evolving dislocation density that "
-      "block describes (Pokor et al. 2004, Eqs 7-8), and dislocation_density must be left unset.");
+      "species' monomer. Defaults to zero, which turns the constant sink off. With a [Recovery] "
+      "sub-block the sink instead comes entirely from the time-evolving dislocation density that "
+      "block describes (Pokor et al. 2004, Eqs 7-8), and a nonzero dislocation_density is "
+      "ignored with a warning.");
 
   params.addParam<Real>(
       "recombination_radius",
@@ -315,6 +316,16 @@ DefectDynamicsAction::actAddNodalKernels()
   const Real lattice_parameter = getParam<Real>("lattice_parameter");
   const Real dislocation_density = getParam<Real>("dislocation_density");
   const Real generation = getParam<Real>("dpa_rate") * getParam<Real>("cascade_efficiency");
+  if (getParam<Real>("temperature") <= 0.0)
+    paramError("temperature", "must be positive.");
+  if (getParam<Real>("dpa_rate") < 0.0)
+    paramError("dpa_rate", "must not be negative.");
+  if (getParam<Real>("cascade_efficiency") < 0.0 || getParam<Real>("cascade_efficiency") > 1.0)
+    paramError("cascade_efficiency", "must be between 0 and 1.");
+  if (dislocation_density < 0.0)
+    paramError("dislocation_density", "must not be negative; use 0 to turn the sink off.");
+  if (getParam<Real>("recombination_radius") < 0.0)
+    paramError("recombination_radius", "must not be negative; use 0 to turn recombination off.");
 
   // A species activates cascade seeding (Pokor et al. 2004, Eqs 1a-1e) simply by setting a
   // nonzero cascade_f2/cascade_f3/cascade_f4 -- the same "nonzero means on" idiom already used by

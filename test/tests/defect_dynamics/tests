@@ -112,6 +112,54 @@
     design = 'DefectSpeciesAction.md'
     requirement = 'BlackBear shall give the same result for a loop species with bias = constant whatever values are given for alpha and alpha_opposite, because a constant bias does not depend on the exponent.'
   []
+  [defect_species_one_cluster_size_error]
+    type = RunException
+    input = defect_dynamics_species_grouping_action.i
+    cli_args = "DefectDynamics/vacancy/num_cluster_sizes=1 DefectDynamics/vacancy/explicit_max=1"
+    expect_err = "a species needs at least 2 cluster sizes"
+    design = 'DefectSpeciesAction.md'
+    requirement = 'BlackBear shall error when a [DefectDynamics] species has fewer than 2 cluster sizes, since the monomer balance reads the dimer.'
+  []
+  [defect_species_huge_radius_error]
+    type = RunException
+    input = vacancy_void_max_cluster_radius_action.i
+    cli_args = "DefectDynamics/vacancy/max_cluster_radius_m=1e-6"
+    expect_err = "it must correspond to between 1 and"
+    design = 'DefectSpeciesAction.md'
+    requirement = 'BlackBear shall error, instead of overflowing, when max_cluster_radius_m corresponds to more point defects than can be represented.'
+  []
+  [defect_species_negative_resolvable_radius_error]
+    type = RunException
+    input = defect_dynamics_species_grouping_action.i
+    cli_args = "DefectDynamics/vacancy/resolvable_radius=-1e-9"
+    expect_err = "must not be negative; leave it at zero to turn it off"
+    design = 'DefectSpeciesAction.md'
+    requirement = 'BlackBear shall error when a [DefectDynamics] species has a negative resolvable_radius.'
+  []
+  [defect_dynamics_negative_dislocation_density_error]
+    type = RunException
+    input = defect_dynamics_species_grouping_action.i
+    cli_args = "DefectDynamics/dislocation_density=-1"
+    expect_err = "must not be negative; use 0 to turn the sink off"
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall error when a [DefectDynamics] block has a negative dislocation_density.'
+  []
+  [defect_dynamics_negative_recombination_radius_error]
+    type = RunException
+    input = defect_dynamics_species_grouping_action.i
+    cli_args = "DefectDynamics/recombination_radius=-1e-9"
+    expect_err = "must not be negative; use 0 to turn recombination off"
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall error when a [DefectDynamics] block has a negative recombination_radius.'
+  []
+  [point_defect_recombination_self_coupled_error]
+    type = RunException
+    input = point_defect_recombination_small.i
+    cli_args = "NodalKernels/vacancy_recombination/coupled_var=vacancy_clusters"
+    expect_err = "must be the other defect family's variable"
+    design = 'PointDefectRecombinationNodalKernel.md'
+    requirement = 'BlackBear shall error when PointDefectRecombinationNodalKernel is coupled to its own variable, since its off-diagonal Jacobian term would then be dropped.'
+  []
   [defect_dynamics_recovery_action]
     type = CSVDiff
     input = defect_dynamics_recovery_action.i

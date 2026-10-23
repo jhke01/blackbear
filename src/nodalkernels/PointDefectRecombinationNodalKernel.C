@@ -41,6 +41,10 @@ PointDefectRecombinationNodalKernel::PointDefectRecombinationNodalKernel(
 {
   if (_recombination_rate < 0.0)
     mooseError("PointDefectRecombinationNodalKernel requires recombination_rate >= 0.");
+  // The off-diagonal Jacobian is only called for a variable other than this one, so coupling the
+  // kernel to its own variable would silently drop the second term of d(C_i*C_v)/dC.
+  if (_coupled_var_num == _var.number())
+    paramError("coupled_var", "must be the other defect family's variable, not this one.");
 }
 
 void
