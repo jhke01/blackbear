@@ -72,7 +72,6 @@
     n_minimum = 1
     r1 = 1.4116319815634138e-10
     radius_exponent = 0.3333333333333333
-    atomic_volume = 1.1782924e-29
   []
   [SoluteClusterDynamics_resolvable_density]
     type = ClusterContinuumMoment

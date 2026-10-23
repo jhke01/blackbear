@@ -528,9 +528,12 @@ SoluteClusterDynamicsAction::addContinuumPostprocessors()
   const Real r1 =
       atomic_volume > 0.0 ? std::cbrt(3.0 * atomic_volume / (4.0 * libMesh::pi)) : 1.0;
 
+  // use_volume: the resolvable density is per volume [1/m^3]; total_density is a plain count (a site
+  // fraction), as the grouped option reports it, so the two options give the same quantity
   auto addMoment = [&](const std::string & postprocessor_name,
                        const std::string & quantity,
-                       unsigned int n_minimum)
+                       unsigned int n_minimum,
+                       bool use_volume)
   {
     InputParameters params = _factory.getValidParams("ClusterContinuumMoment");
     params.set<std::vector<VariableName>>("clusters") = {var_name};
@@ -540,14 +543,14 @@ SoluteClusterDynamicsAction::addContinuumPostprocessors()
     params.set<Real>("continuum_initial_width") = initial_width;
     params.set<Real>("continuum_width_ratio") = width_ratio;
     params.set<unsigned int>("n_minimum") = n_minimum;
-    if (atomic_volume > 0.0)
+    if (use_volume && atomic_volume > 0.0)
       params.set<Real>("atomic_volume") = atomic_volume;
     params.set<Real>("r1") = r1;
     params.set<Real>("radius_exponent") = 1.0 / 3.0;
     _problem->addPostprocessor("ClusterContinuumMoment", postprocessor_name, params);
   };
 
-  addMoment(name() + "_total_density", "density", getParam<unsigned int>("density_n_minimum"));
+  addMoment(name() + "_total_density", "density", getParam<unsigned int>("density_n_minimum"), false);
 
   const Real resolvable_radius = getParam<Real>("resolvable_radius");
   if (resolvable_radius <= 0.0)
@@ -556,8 +559,8 @@ SoluteClusterDynamicsAction::addContinuumPostprocessors()
     paramError("resolvable_radius", "requires atomic_volume > 0, to convert the radius to a size.");
   const unsigned int n_minimum =
       static_cast<unsigned int>(std::ceil(std::pow(resolvable_radius / r1, 3.0)));
-  addMoment(name() + "_resolvable_density", "density", n_minimum);
-  addMoment(name() + "_resolvable_avg_radius", "average_radius", n_minimum);
+  addMoment(name() + "_resolvable_density", "density", n_minimum, true);
+  addMoment(name() + "_resolvable_avg_radius", "average_radius", n_minimum, true);
 }
 
 void
