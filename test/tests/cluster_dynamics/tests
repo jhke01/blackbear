@@ -268,6 +268,34 @@
     design = 'GenericClusterDynamicsGroupedNodalKernel.md'
     requirement = 'BlackBear shall provide an analytical off-diagonal Jacobian for the ClusterDynamicsGroupedNodalKernel that captures the coupling of the monomer diffusivity to a DefectDynamics vacancy monomer concentration through vacancy_coupled_var.'
   []
+  [cluster_dynamics_vacancy_coupling_supersaturated]
+    type = CSVDiff
+    input = cluster_dynamics_vacancy_coupling_supersaturated.i
+    csvdiff = 'cluster_dynamics_vacancy_coupling_supersaturated_out.csv'
+    design = 'GenericClusterDynamicsNodalKernel.md'
+    requirement = 'BlackBear shall scale the monomer diffusivity of the ClusterDynamicsNodalKernel by the ratio of the coupled vacancy monomer concentration to its thermal value when vacancy_coupled_var is given and that ratio is not 1.'
+  []
+  [cluster_dynamics_vacancy_coupling_supersaturated_twin]
+    type = CSVDiff
+    input = cluster_dynamics_vacancy_coupling_supersaturated_twin.i
+    csvdiff = 'cluster_dynamics_vacancy_coupling_supersaturated_twin_out.csv'
+    design = 'GenericClusterDynamicsNodalKernel.md'
+    requirement = 'BlackBear shall give, for the ClusterDynamicsNodalKernel with a vacancy supersaturation of 10, the same solution as the uncoupled kernel with a monomer diffusivity ten times larger.'
+  []
+  [cluster_dynamics_grouped_vacancy_coupling_supersaturated]
+    type = CSVDiff
+    input = cluster_dynamics_grouped_vacancy_coupling_supersaturated.i
+    csvdiff = 'cluster_dynamics_grouped_vacancy_coupling_supersaturated_out.csv'
+    design = 'GenericClusterDynamicsGroupedNodalKernel.md'
+    requirement = 'BlackBear shall scale the monomer diffusivity of the ClusterDynamicsGroupedNodalKernel by the ratio of the coupled vacancy monomer concentration to its thermal value when vacancy_coupled_var is given and that ratio is not 1.'
+  []
+  [cluster_dynamics_grouped_vacancy_coupling_supersaturated_twin]
+    type = CSVDiff
+    input = cluster_dynamics_grouped_vacancy_coupling_supersaturated_twin.i
+    csvdiff = 'cluster_dynamics_grouped_vacancy_coupling_supersaturated_twin_out.csv'
+    design = 'GenericClusterDynamicsGroupedNodalKernel.md'
+    requirement = 'BlackBear shall give, for the ClusterDynamicsGroupedNodalKernel with a vacancy supersaturation of 10, the same solution as the uncoupled kernel with a monomer diffusivity ten times larger.'
+  []
   [cluster_dynamics_vacancy_coupling_double_counting_warning]
     type = RunException
     input = cluster_dynamics_vacancy_coupling.i

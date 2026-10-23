@@ -1,14 +1,17 @@
-# [SoluteClusterDynamics] + [DefectDynamics] together: confirms the solute kernel's
-# vacancy_coupled_var/vacancy_formation_energy_eV are auto-wired to the [DefectDynamics] block's
-# vacancy species (identified by geometry = void), with no coupling parameter typed by hand.
-# vacancy's own dynamics are deliberately held fixed (generation = sink = 0, no cascade/
-# recombination/opposite species), so its monomer concentration stays at the thermal-equilibrium
-# initial condition [DefectDynamics] always derives (4*exp(-Ef/kT) at Ef = 1.6 eV, T = 600 K) --
-# this test's own goal is confirming the auto-detected WIRING itself is correct (verified directly
-# against solute_defect_coupled_equivalent.i's hand-typed vacancy_coupled_var pointing at the same
-# variable/formation energy, which produces bit-identical postprocessor values); the coupling's
-# own non-trivial physical effect at S_v != 1 is already covered by the kernel-level
-# cluster_dynamics_jacobian_vacancy_coupling/cluster_dynamics_vacancy_coupling tests.
+# [SoluteClusterDynamics] + [DefectDynamics] together: the solute kernel's vacancy_coupled_var and
+# vacancy_formation_energy_eV are wired automatically to the [DefectDynamics] block's vacancy species
+# (identified by geometry = void), with no coupling parameter typed by hand.
+#
+# The vacancies are produced by irradiation here (dpa_rate, a dislocation sink), so the vacancy monomer
+# concentration rises far above its thermal value and scales the solute monomer diffusivity by the
+# supersaturation C_v / C_v_thermal. That makes the result depend on the coupling: the same solute
+# problem without the [DefectDynamics] block gives a solute monomer concentration that is 0.1% higher
+# after 4 steps, against a comparison tolerance of 5.5e-6, so the test fails if the auto-wiring is lost.
+#
+# The preconditioner names the pair of the solute array and the vacancy array. MOOSE calls the
+# kernel's off-diagonal Jacobian only for pairs in the coupling matrix, and SMP full = false leaves
+# this pair out, so without these two lines the vacancy block is never assembled and Newton needs
+# smaller steps.
 
 [Mesh]
   type = GeneratedMesh
@@ -25,9 +28,9 @@
   temperature = 600
   atomic_volume = 1.1782924e-29
   lattice_parameter = 0.36e-9
-  dpa_rate = 0
-  cascade_efficiency = 0
-  dislocation_density = 0
+  dpa_rate = 1e-6
+  cascade_efficiency = 1
+  dislocation_density = 1e14
 
   [vacancy]
     geometry = void
@@ -67,6 +70,8 @@
   [smp]
     type = SMP
     full = false
+    off_diag_row = 'SoluteClusterDynamics_clusters_0'
+    off_diag_column = 'vacancy_clusters_0'
   []
 []
 
@@ -77,8 +82,8 @@
   petsc_options_value = 'ilu      rcm'
   nl_rel_tol = 1e-9
   nl_abs_tol = 1e-12
-  dt = 0.01
-  num_steps = 3
+  dt = 5e-5
+  num_steps = 4
 []
 
 [Outputs]
