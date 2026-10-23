@@ -15,6 +15,7 @@
 #pragma once
 
 #include "Action.h"
+#include "ClusterContinuumLayout.h"
 #include "ClusterGroupingLayout.h"
 
 class DefectDynamicsGridAction;
@@ -68,7 +69,18 @@ public:
   /// object referencing a species agrees on its variable's name.
   static std::string variableName(const DefectSpeciesAction & sp);
 
+  /// Whether the large cluster sizes are a Fokker-Planck continuum (tail = fokker_planck) instead of
+  /// grouped bins. Public so a sibling action can tell which representation a species' array has.
+  bool usesContinuumTail() const;
+
+  /// The continuum layout of a species' array (tail = fokker_planck only)
+  ClusterContinuumLayout continuumLayout(const DefectSpeciesAction & sp) const;
+
 protected:
+  /// Errors for every setting that tail = fokker_planck does not support, and warns about settings
+  /// that only apply to the other representation
+  void validateTail() const;
+
   /// This block's [Grid] sub-block, or nullptr if none was given (an error, checked in act()).
   const DefectDynamicsGridAction * grid() const;
   /// This block's optional [Recovery] sub-block, or nullptr if none was given (zero is the
@@ -86,6 +98,18 @@ protected:
   /// A*n^exponent + C, the capillary formation-energy coefficient/constant pair derived from
   /// (Ef, Eb2, exponent): A = (Ef - Eb2)/(2^exponent - 1), C = Ef - A.
   static void capillaryCoefficients(Real Ef_eV, Real Eb2_eV, Real exponent, Real & A, Real & C);
+
+  /// Adds the ContinuumLoopNodalKernel of a species (tail = fokker_planck). `opposite` is the other
+  /// species when opposite-species absorption is active, nullptr otherwise. `generation` is the
+  /// block's total production rate and `sink` this species' constant monomer sink.
+  void addContinuumKernel(const DefectSpeciesAction & sp,
+                          const DefectSpeciesAction * opposite,
+                          Real generation,
+                          Real sink,
+                          Real formation_energy_eV,
+                          Real energy_coefficient_eV,
+                          Real energy_constant_eV,
+                          bool cascade);
 
   void actAddVariables();
   void actAddFunctions();

@@ -85,6 +85,8 @@ protected:
   const Real _opposite_z;
   const Real _opposite_z_loop;
   const Real _opposite_alpha;
+  const Real _partner_z_loop;
+  const Real _partner_alpha;
   const ArrayVariableValue & _opposite_array;
   const unsigned int _opposite_var_num;
 

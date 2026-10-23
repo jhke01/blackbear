@@ -88,6 +88,42 @@ and typed in by hand:
   smallest cluster size resolvable by whatever characterization technique (e.g. TEM) the input
   is being compared against. This is independent per species, not shared.
 
+## Fokker-Planck Continuum Tail
+
+Instead of grouping the large sizes in bins, the block can store them as a Fokker-Planck continuum
+(Pokor et al. 2004, Section 4.1) by setting [!param](/DefectDynamics/DefectDynamicsAction/tail)
+`= fokker_planck`. Sizes up to [!param](/DefectDynamics/DefectDynamicsAction/switch_size) are then
+individual unknowns and larger sizes are finite-volume cells that start at `switch_size` + 1/2 with
+the width [!param](/DefectDynamics/DefectDynamicsAction/continuum_initial_width) and grow by
+[!param](/DefectDynamics/DefectDynamicsAction/continuum_width_ratio) from one cell to the next. Each
+species builds a [ContinuumLoopNodalKernel.md] in place of the grouped loop kernel, the monomer and
+the resolvable-population postprocessors read the continuum
+([ClusterContinuumMoment.md]), and the size distribution is reported by
+[ClusterContinuumDistribution.md]. Cascade seeding, `[Recovery]`, recombination, opposite-species
+absorption and the constant dislocation sink are available as with grouping.
+[!param](/DefectDynamics/DefectDynamicsAction/continuum_limiter) selects the second-order
+(minmod-limited) or the first-order face values.
+
+The continuum reaches a given accuracy with fewer unknowns than grouping, but it is narrower:
+
+- Only loop species are supported (`geometry = loop`), with the capillary binding-energy model.
+- Both species must have the same maximum cluster size, since each family reads the cells of the
+  other. The grouping parameters of a species (`use_grouping`, `explicit_max`, `group_*`) are not
+  allowed with the continuum, and `switch_size` must be at least 4 when a species has cascade
+  seeding.
+- The flux out of the last cell is zero, so the maximum cluster size must be large enough that the
+  population does not reach it; check that the share of the point defects in the last cells is
+  small.
+
+In the Pokor benchmark at 603 K and 1 dpa with a largest size of 40,000, a switch size of 100 (576
+unknowns for the two species) gives, at the end of the run, monomer concentrations, densities and
+mean radii within 0.01 percent of the SUNDIALS Pokor benchmark (MNS_CD) with the same physics, in
+about 10 seconds and 660 MB. A grouping with 968 unknowns and 1.7 GB comes within 10 percent of the
+same reference, and groupings with 356 to 824 unknowns give resolvable radii that are too large by
+factors of 2 to 6.
+The time to reach the first resolvable loops is a steep onset, so the time step must be limited
+(for example with a `timestep_limiting_postprocessor` of $0.01\,t + 0.5$ s) to resolve it.
+
 ## Dislocation Recovery
 
 By default, each species' dislocation sink uses a constant
@@ -151,6 +187,7 @@ switches, each defaulting to "off").
 | Capillary formation-energy law | [!param](/DefectDynamics/DefectSpeciesAction/Ef) + [!param](/DefectDynamics/DefectSpeciesAction/Eb2) (default; derives $A$, $C$) | [!param](/DefectDynamics/DefectSpeciesAction/capillary_coefficient_eV) + [!param](/DefectDynamics/DefectSpeciesAction/capillary_constant_eV) ($A$, $C$ given directly) | per species |
 | Maximum cluster size | [!param](/DefectDynamics/DefectSpeciesAction/num_cluster_sizes) (a point-defect count, given directly) | [!param](/DefectDynamics/DefectSpeciesAction/max_cluster_radius_m) (a physical radius in meters; converted internally) | per species |
 | Dislocation bias (loop only) | [!param](/DefectDynamics/DefectSpeciesAction/bias) `= size_dependent` (default; uses `Z`, `Z_loop`, `alpha`) | `bias = constant` (uses `Z` only; the action sets `Z_loop = Z / sqrt(b/(8 pi a0))` so the bias equals `Z` at every size) | per species |
+| Storage of the large cluster sizes | [!param](/DefectDynamics/DefectDynamicsAction/tail) `= grouping` (default; per species `explicit_max` and the `group_*` parameters) | `= fokker_planck` (`switch_size` and the `continuum_*` parameters; loops only) | shared |
 | Emission binding energy | [!param](/DefectDynamics/DefectSpeciesAction/binding_energy_model) `= capillary` (default; always uses the law above) | `= binding_energy_table` or `= formation_energy_table` (direct DFT/MD data for small $n$, falling back to the capillary law beyond the table) | per species |
 
 Independent on/off switches (not mutually exclusive with anything, each off by default):
@@ -265,4 +302,7 @@ is what turns off cascade seeding for that species.
 - [GenericDislocationRecoveryNodalKernel.md]
 - [GenericCascadeSpectrumNodalKernel.md]
 - [ClusterSizeDistributionGrouped.md]
+- [ContinuumLoopNodalKernel.md]
+- [ClusterContinuumMoment.md]
+- [ClusterContinuumDistribution.md]
 - [theory/defect_dynamics.md]

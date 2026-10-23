@@ -14,6 +14,7 @@
 
 #include "ContinuumLoopNodalKernel.h"
 
+#include "ClusterDynamicsSolverCheck.h"
 #include "FEProblemBase.h"
 
 #include "libmesh/utility.h"
@@ -92,6 +93,12 @@ ContinuumLoopNodalKernel::validParams()
   params.addParam<Real>("opposite_alpha",
                         1.0,
                         "Exponent of the approach of that bias to opposite_Z with size.");
+  params.addParam<Real>("partner_Z_loop",
+                        "Small-loop coefficient of the bias of the opposite family's loops for "
+                        "capturing THIS family's monomer. Defaults to Z_loop. The large-loop limit "
+                        "is Z.");
+  params.addParam<Real>("partner_alpha",
+                        "Exponent of the approach of that bias to Z with size. Defaults to alpha.");
   params.addParam<Real>("opposite_burgers_vector",
                         0.0,
                         "Burgers vector of the opposite family's loops [m], which sets their "
@@ -129,6 +136,8 @@ ContinuumLoopNodalKernel::ContinuumLoopNodalKernel(const InputParameters & param
     _opposite_z(getParam<Real>("opposite_Z")),
     _opposite_z_loop(getParam<Real>("opposite_Z_loop")),
     _opposite_alpha(getParam<Real>("opposite_alpha")),
+    _partner_z_loop(isParamValid("partner_Z_loop") ? getParam<Real>("partner_Z_loop") : _z_loop),
+    _partner_alpha(isParamValid("partner_alpha") ? getParam<Real>("partner_alpha") : _alpha_loop),
     _opposite_array(coupledArrayValue("opposite_coupled_var")),
     _opposite_var_num(coupled("opposite_coupled_var")),
     _layout(getParam<unsigned int>("num_cluster_sizes"),
@@ -151,6 +160,13 @@ ContinuumLoopNodalKernel::ContinuumLoopNodalKernel(const InputParameters & param
                _count,
                ".");
 
+  // The monomer row and column are dense, so the Jacobian has entries outside the default pattern
+  if (!_fe_problem.useHashTableMatrixAssembly())
+    mooseError(type(), " requires Problem/use_hash_table_matrix_assembly = true");
+  if (_tid == 0)
+    ClusterDynamics::checkSolverSetup(
+        *this, _fe_problem, _var.sys().number(), _var.number(), _var.count());
+
   if (_opposite_active)
   {
     if (_opposite_var_num == _var.number())
@@ -165,10 +181,6 @@ ContinuumLoopNodalKernel::ContinuumLoopNodalKernel(const InputParameters & param
                  " components but this variable has ",
                  _count,
                  "; the two families must use the same layout.");
-    // The Jacobian has entries in every row of the monomer and in the shrink fluxes, outside the
-    // diagonal blocks of the default pattern
-    if (!_fe_problem.useHashTableMatrixAssembly())
-      mooseError(type(), " with opposite_coupled_var requires Problem/use_hash_table_matrix_assembly = true");
   }
 }
 
@@ -200,7 +212,9 @@ ContinuumLoopNodalKernel::partnerBeta(unsigned int n) const
     return 0.0;
   const Real radius =
       std::sqrt(static_cast<Real>(n) * _atomic_volume / (libMesh::pi * _opposite_burgers_vector));
-  return 2.0 * libMesh::pi * radius * biasFactor(n, _burgers_vector, _z, _z_loop, _alpha_loop) *
+  // The opposite family's own Burgers vector sets both the radius and the small-loop scale of the bias
+  return 2.0 * libMesh::pi * radius *
+         biasFactor(n, _opposite_burgers_vector, _z, _partner_z_loop, _partner_alpha) *
          _diffusivity / _atomic_volume;
 }
 

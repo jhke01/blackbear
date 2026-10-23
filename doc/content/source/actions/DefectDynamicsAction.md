@@ -11,4 +11,5 @@ underlying kernels need (sink coefficients, recombination rate, capillary coeffi
 initial condition, TEM-visible cutoffs, and the opposite-species coupling parameters) from
 physical inputs instead of requiring them to be typed and kept consistent by hand. This is
 invoked using the [DefectDynamics](syntax/DefectDynamics/index.md) block. See that page for a
-description, example usage, and parameters.
+description, example usage, and parameters. With `tail = fokker_planck` the large cluster sizes are
+a Fokker-Planck continuum ([ContinuumLoopNodalKernel.md]) instead of grouped bins.

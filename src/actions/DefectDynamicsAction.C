@@ -105,6 +105,35 @@ DefectDynamicsAction::validParams()
       "recombination (via recombination_radius) from opposite-species absorption, or to run "
       "two species with no coupling between them at all.");
 
+  params.addParam<MooseEnum>(
+      "tail",
+      MooseEnum("grouping fokker_planck", "grouping"),
+      "How the large cluster sizes are stored. 'grouping' (default): bins with a linear "
+      "reconstruction, set per species by explicit_max and the group_* parameters. 'fokker_planck': "
+      "sizes up to switch_size are individual unknowns and larger sizes are finite-volume cells of "
+      "a Fokker-Planck continuum (Pokor et al. 2004, Section 4.1), set by switch_size and the "
+      "continuum_* parameters. The continuum needs far fewer unknowns for the same accuracy, but "
+      "supports only loop species with the capillary binding-energy model, and both species must "
+      "have the same maximum cluster size.");
+  params.addParam<unsigned int>(
+      "switch_size",
+      100,
+      "Largest cluster size that is an individual unknown when tail = fokker_planck; larger sizes "
+      "are continuum cells. Must be at least 4 when a species has cascade seeding, and below every "
+      "species' maximum cluster size.");
+  params.addParam<Real>("continuum_initial_width",
+                        1.0,
+                        "Width of the first continuum cell when tail = fokker_planck.");
+  params.addParam<Real>("continuum_width_ratio",
+                        1.04,
+                        "Growth factor of the cell width from one cell to the next when tail = "
+                        "fokker_planck.");
+  params.addParam<bool>("continuum_limiter",
+                        true,
+                        "Reconstruct the cell values at a cell face with a minmod-limited slope "
+                        "(second order) when tail = fokker_planck. If false the cell averages are "
+                        "used (first-order upwind).");
+
   params.addParam<std::vector<Real>>(
       "size_distribution_times",
       std::vector<Real>(),
@@ -159,6 +188,108 @@ DefectDynamicsAction::species() const
     mooseError("[DefectDynamics] found ", sp.size(), " species sub-blocks; at most two "
               "are supported.");
   return sp;
+}
+
+bool
+DefectDynamicsAction::usesContinuumTail() const
+{
+  return getParam<MooseEnum>("tail") == "fokker_planck";
+}
+
+ClusterContinuumLayout
+DefectDynamicsAction::continuumLayout(const DefectSpeciesAction & sp) const
+{
+  return ClusterContinuumLayout(
+      sp.resolvedNumClusterSizes(getParam<Real>("atomic_volume"),
+                                 getParam<Real>("lattice_parameter")),
+      getParam<unsigned int>("switch_size"),
+      getParam<Real>("continuum_initial_width"),
+      getParam<Real>("continuum_width_ratio"));
+}
+
+void
+DefectDynamicsAction::validateTail() const
+{
+  const char * continuum_params[] = {
+      "switch_size", "continuum_initial_width", "continuum_width_ratio", "continuum_limiter"};
+  if (!usesContinuumTail())
+  {
+    for (const auto * name : continuum_params)
+      if (parameters().isParamSetByUser(name))
+        paramWarning(name, name, " has no effect with tail = grouping.");
+    return;
+  }
+
+  if (getParam<unsigned int>("switch_size") < 2)
+    paramError("switch_size", "must be at least 2.");
+  if (getParam<Real>("continuum_initial_width") <= 0.0)
+    paramError("continuum_initial_width", "must be positive.");
+  if (getParam<Real>("continuum_width_ratio") < 1.0)
+    paramError("continuum_width_ratio", "must be at least 1.");
+
+  const Real atomic_volume = getParam<Real>("atomic_volume");
+  const Real lattice_parameter = getParam<Real>("lattice_parameter");
+  const char * grouping_params[] = {"use_grouping",
+                                    "explicit_max",
+                                    "group_spacing",
+                                    "group_linear_width",
+                                    "group_geometric_ratio",
+                                    "enforce_group_nonnegative",
+                                    "group_nonnegative_tolerance_factor"};
+  const auto sp_list = species();
+  for (const auto * sp : sp_list)
+  {
+    if (sp->getParam<MooseEnum>("geometry") != "loop")
+      mooseError("[DefectDynamics] with tail = fokker_planck supports loop species only, but "
+                 "species '",
+                 sp->name(),
+                 "' has geometry = void.");
+    if (sp->getParam<MooseEnum>("binding_energy_model") != "capillary")
+      mooseError("[DefectDynamics] with tail = fokker_planck supports only the capillary "
+                 "binding-energy model, but species '",
+                 sp->name(),
+                 "' sets binding_energy_model = ",
+                 std::string(sp->getParam<MooseEnum>("binding_energy_model")),
+                 ".");
+    for (const auto * name : grouping_params)
+      if (sp->parameters().isParamSetByUser(name))
+        mooseError("[DefectDynamics] species '",
+                   sp->name(),
+                   "' sets ",
+                   name,
+                   ", which only applies to tail = grouping.");
+
+    const unsigned int n = sp->resolvedNumClusterSizes(atomic_volume, lattice_parameter);
+    if (getParam<unsigned int>("switch_size") >= n)
+      paramError("switch_size",
+                 "must be smaller than the maximum cluster size of every species, but species '",
+                 sp->name(),
+                 "' has ",
+                 n,
+                 ".");
+    const bool cascade = sp->getParam<Real>("cascade_f2") + sp->getParam<Real>("cascade_f3") +
+                             sp->getParam<Real>("cascade_f4") >
+                         0.0;
+    if (cascade && getParam<unsigned int>("switch_size") < 4)
+      paramError("switch_size",
+                 "must be at least 4 when species '",
+                 sp->name(),
+                 "' has cascade seeding, so that sizes 2 to 4 are individual unknowns.");
+  }
+  // The two families see each other's cells, so they need identical layouts
+  if (sp_list.size() == 2 &&
+      sp_list[0]->resolvedNumClusterSizes(atomic_volume, lattice_parameter) !=
+          sp_list[1]->resolvedNumClusterSizes(atomic_volume, lattice_parameter))
+    mooseError("[DefectDynamics] with tail = fokker_planck needs the same maximum cluster size for "
+               "both species, but '",
+               sp_list[0]->name(),
+               "' has ",
+               sp_list[0]->resolvedNumClusterSizes(atomic_volume, lattice_parameter),
+               " and '",
+               sp_list[1]->name(),
+               "' has ",
+               sp_list[1]->resolvedNumClusterSizes(atomic_volume, lattice_parameter),
+               ".");
 }
 
 Real
@@ -232,6 +363,9 @@ void
 DefectDynamicsAction::act()
 {
   if (_current_task == "add_variable")
+    validateTail();
+
+  if (_current_task == "add_variable")
     actAddVariables();
   else if (_current_task == "add_function")
     actAddFunctions();
@@ -255,12 +389,15 @@ DefectDynamicsAction::actAddVariables()
   const auto grid_action = grid();
   for (const auto * sp : species())
   {
-    const auto layout =
-        sp->layout(sp->resolvedNumClusterSizes(atomic_volume, lattice_parameter), grid_action);
+    const unsigned int components =
+        usesContinuumTail()
+            ? continuumLayout(*sp).componentCount()
+            : sp->layout(sp->resolvedNumClusterSizes(atomic_volume, lattice_parameter), grid_action)
+                  .componentCount();
     InputParameters params = _factory.getValidParams("ArrayMooseVariable");
     params.set<MooseEnum>("family") = "LAGRANGE";
     params.set<MooseEnum>("order") = "FIRST";
-    params.set<unsigned int>("components") = layout.componentCount();
+    params.set<unsigned int>("components") = components;
     _problem->addVariable("ArrayMooseVariable", variableName(*sp), params);
   }
 }
@@ -290,6 +427,16 @@ DefectDynamicsAction::actAddICs()
   const auto grid_action = grid();
   for (const auto * sp : species())
   {
+    if (usesContinuumTail())
+    {
+      // Only the monomer is populated: component 0 reads the function at x = 0 and every other
+      // component reads it at x >= 1, where it is zero
+      InputParameters params = _factory.getValidParams("ArrayFunctionIndexIC");
+      params.set<VariableName>("variable") = variableName(*sp);
+      params.set<FunctionName>("function") = functionName(*sp);
+      _problem->addInitialCondition("ArrayFunctionIndexIC", sp->name() + "_ic", params);
+      continue;
+    }
     InputParameters params = _factory.getValidParams("GroupedArrayFunctionIndexIC");
     params.set<VariableName>("variable") = variableName(*sp);
     params.set<FunctionName>("function") = functionName(*sp);
@@ -303,6 +450,86 @@ DefectDynamicsAction::actAddICs()
     params.set<Real>("group_geometric_ratio") = g.geometric_ratio;
     _problem->addInitialCondition("GroupedArrayFunctionIndexIC", sp->name() + "_ic", params);
   }
+}
+
+void
+DefectDynamicsAction::addContinuumKernel(const DefectSpeciesAction & sp,
+                                         const DefectSpeciesAction * opposite,
+                                         Real generation,
+                                         Real sink,
+                                         Real formation_energy_eV,
+                                         Real energy_coefficient_eV,
+                                         Real energy_constant_eV,
+                                         bool cascade)
+{
+  const Real atomic_volume = getParam<Real>("atomic_volume");
+  const Real lattice_parameter = getParam<Real>("lattice_parameter");
+  const Real Z = sp.getParam<Real>("Z");
+  const bool constant_bias = sp.getParam<MooseEnum>("bias") == "constant";
+
+  InputParameters params = _factory.getValidParams("ContinuumLoopNodalKernel");
+  params.set<NonlinearVariableName>("variable") = variableName(sp);
+
+  // With cascade seeding the monomer keeps the rest of the generation rate; the seeded clusters are
+  // added by this species' CascadeSpectrumNodalKernel
+  Real monomer_generation = generation;
+  if (cascade)
+    monomer_generation *= 1.0 - sp.getParam<Real>("cascade_f2") - sp.getParam<Real>("cascade_f3") -
+                          sp.getParam<Real>("cascade_f4");
+  params.set<Real>("generation") = monomer_generation;
+  params.set<Real>("sink") = sink;
+
+  params.set<Real>("temperature") = getParam<Real>("temperature");
+  params.set<Real>("atomic_volume") = atomic_volume;
+  params.set<Real>("lattice_parameter") = lattice_parameter;
+  params.set<Real>("burgers_vector") = sp.getParam<Real>("burgers_vector");
+  params.set<Real>("D0") = sp.getParam<Real>("D0");
+  params.set<Real>("Em_eV") = sp.getParam<Real>("Em");
+  params.set<Real>("Z") = Z;
+  params.set<Real>("Z_loop") =
+      constant_bias ? constantBiasZLoop(Z, sp.getParam<Real>("burgers_vector"), lattice_parameter)
+                    : sp.getParam<Real>("Z_loop");
+  params.set<Real>("alpha") = sp.getParam<Real>("alpha");
+  params.set<Real>("formation_energy_eV") = formation_energy_eV;
+  params.set<Real>("energy_exponent") = sp.getParam<Real>("exponent");
+  params.set<Real>("energy_coefficient_eV") = energy_coefficient_eV;
+  params.set<Real>("energy_constant_eV") = energy_constant_eV;
+
+  const auto layout = continuumLayout(sp);
+  params.set<unsigned int>("num_cluster_sizes") = layout.numClusterSizes();
+  params.set<unsigned int>("switch_size") = layout.switchSize();
+  params.set<Real>("continuum_initial_width") = getParam<Real>("continuum_initial_width");
+  params.set<Real>("continuum_width_ratio") = getParam<Real>("continuum_width_ratio");
+  params.set<bool>("use_limiter") = getParam<bool>("continuum_limiter");
+
+  if (opposite)
+  {
+    // The same derivation as for the grouped loop kernel: this loop absorbs the opposite monomer
+    // with the opposite species' Z as the large-loop limit and this species' own Z_loop_opposite
+    // and alpha_opposite; the opposite loops absorb this monomer with this species' Z as the limit
+    // and their own Z_loop_opposite and alpha_opposite.
+    const Real opposite_Z = opposite->getParam<Real>("Z");
+    const Real b = sp.getParam<Real>("burgers_vector");
+    const Real opposite_b = opposite->getParam<Real>("burgers_vector");
+    const Real default_b = lattice_parameter / std::sqrt(3.0);
+
+    params.set<std::vector<VariableName>>("opposite_coupled_var") = {variableName(*opposite)};
+    params.set<Real>("opposite_D0") = opposite->getParam<Real>("D0");
+    params.set<Real>("opposite_Em_eV") = opposite->getParam<Real>("Em");
+    params.set<Real>("opposite_Z") = opposite_Z;
+    params.set<Real>("opposite_Z_loop") =
+        constant_bias ? constantBiasZLoop(opposite_Z, b, lattice_parameter)
+                      : sp.getParam<Real>("Z_loop_opposite");
+    params.set<Real>("opposite_alpha") = sp.getParam<Real>("alpha_opposite");
+    params.set<Real>("opposite_burgers_vector") = opposite_b != 0.0 ? opposite_b : default_b;
+    params.set<Real>("partner_Z_loop") =
+        opposite->getParam<MooseEnum>("bias") == "constant"
+            ? constantBiasZLoop(Z, opposite_b, lattice_parameter)
+            : opposite->getParam<Real>("Z_loop_opposite");
+    params.set<Real>("partner_alpha") = opposite->getParam<Real>("alpha_opposite");
+  }
+
+  _problem->addNodalKernel("ContinuumLoopNodalKernel", sp.name() + "_dyn", params);
 }
 
 void
@@ -344,6 +571,8 @@ DefectDynamicsAction::actAddNodalKernels()
   {
     if (!cascadeActive(*sp))
       continue;
+    if (usesContinuumTail())
+      continue; // switch_size >= 4 was checked in validateTail()
     const auto g = sp->grouping(grid_action);
     if (g.use_grouping && g.explicit_max < 4)
       mooseError("[DefectDynamics] requires explicit_max >= 4 when species '",
@@ -441,6 +670,19 @@ DefectDynamicsAction::actAddNodalKernels()
     // E_f(n) evaluated at n = 1 -- exactly what Ef names in the other path.
     Real A, C, formation_energy_eV;
     resolveCapillaryCoefficients(*sp, A, C, formation_energy_eV);
+
+    if (usesContinuumTail())
+    {
+      addContinuumKernel(*sp,
+                         opposite,
+                         generation,
+                         recovery_action ? 0.0 : diffusivity(*sp) * sp->getParam<Real>("Z") * dislocation_density,
+                         formation_energy_eV,
+                         A,
+                         C,
+                         cascadeActive(*sp));
+      continue;
+    }
 
     const std::string kernel_type =
         is_void ? "VacancyVoidGroupedNodalKernel" : "InterstitialLoopGroupedNodalKernel";
@@ -658,6 +900,16 @@ DefectDynamicsAction::actAddPostprocessors()
     const unsigned int num_cluster_sizes =
         sp->resolvedNumClusterSizes(atomic_volume, lattice_parameter);
 
+    if (usesContinuumTail())
+    {
+      // The monomer is array component 0 in either representation
+      InputParameters params = _factory.getValidParams("ClusterSizeConcentration");
+      params.set<std::vector<VariableName>>("clusters") = {var_name};
+      params.set<unsigned int>("n_size") = 1;
+      _problem->addPostprocessor(
+          "ClusterSizeConcentration", sp->name() + "_monomer_concentration", params);
+    }
+    else
     {
       InputParameters params = _factory.getValidParams("ClusterSizeConcentrationGrouped");
       params.set<std::vector<VariableName>>("clusters") = {var_name};
@@ -676,6 +928,28 @@ DefectDynamicsAction::actAddPostprocessors()
     sp->monomerRadiusLaw(atomic_volume, lattice_parameter, r1, radius_exponent);
     const unsigned int n_minimum =
         DefectSpeciesAction::clusterSizeFromRadius(resolvable_radius, r1, radius_exponent);
+
+    if (usesContinuumTail())
+    {
+      const std::pair<const char *, const char *> quantities[] = {
+          {"density", "_resolvable_density"}, {"average_radius", "_resolvable_avg_radius"}};
+      for (const auto & [quantity, suffix] : quantities)
+      {
+        InputParameters params = _factory.getValidParams("ClusterContinuumMoment");
+        params.set<std::vector<VariableName>>("clusters") = {var_name};
+        params.set<MooseEnum>("quantity") = quantity;
+        params.set<unsigned int>("num_cluster_sizes") = num_cluster_sizes;
+        params.set<unsigned int>("switch_size") = getParam<unsigned int>("switch_size");
+        params.set<Real>("continuum_initial_width") = getParam<Real>("continuum_initial_width");
+        params.set<Real>("continuum_width_ratio") = getParam<Real>("continuum_width_ratio");
+        params.set<unsigned int>("n_minimum") = n_minimum;
+        params.set<Real>("atomic_volume") = atomic_volume;
+        params.set<Real>("r1") = r1;
+        params.set<Real>("radius_exponent") = radius_exponent;
+        _problem->addPostprocessor("ClusterContinuumMoment", sp->name() + suffix, params);
+      }
+      continue;
+    }
 
     {
       InputParameters params = _factory.getValidParams("ClusterTotalDensityGrouped");
@@ -743,6 +1017,22 @@ DefectDynamicsAction::actAddVectorPostprocessors()
 
     Real r1, radius_exponent;
     sp->monomerRadiusLaw(atomic_volume, lattice_parameter, r1, radius_exponent);
+
+    if (usesContinuumTail())
+    {
+      InputParameters params = _factory.getValidParams("ClusterContinuumDistribution");
+      params.set<std::vector<VariableName>>("clusters") = {var_name};
+      params.set<unsigned int>("num_cluster_sizes") = num_cluster_sizes;
+      params.set<unsigned int>("switch_size") = getParam<unsigned int>("switch_size");
+      params.set<Real>("continuum_initial_width") = getParam<Real>("continuum_initial_width");
+      params.set<Real>("continuum_width_ratio") = getParam<Real>("continuum_width_ratio");
+      params.set<Real>("r1") = r1;
+      params.set<Real>("radius_exponent") = radius_exponent;
+      params.set<std::vector<OutputName>>("outputs") = {output_name};
+      _problem->addVectorPostprocessor(
+          "ClusterContinuumDistribution", sp->name() + "_size_distribution", params);
+      continue;
+    }
 
     InputParameters params = _factory.getValidParams("ClusterSizeDistributionGrouped");
     params.set<std::vector<VariableName>>("clusters") = {var_name};

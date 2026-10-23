@@ -12,9 +12,13 @@ to the grouped $L_0/L_1$ representation of
 detailed-balance emission from a capillary-law binding energy) is the same, and only the way the
 large sizes are stored differs.
 
-!alert warning title=One family only
-This kernel has no opposite-species absorption and no recombination. It models a single loop
-family with a monomer source and a linear sink.
+The kernel can model one loop family with a monomer source and a linear sink, or two families that
+shrink by absorbing each other's monomers (see [Two coupled families](#two-families)). Recombination,
+the cascade source and a time-dependent sink are separate kernels
+([PointDefectRecombinationNodalKernel.md], [GenericCascadeSpectrumNodalKernel.md],
+[GenericDislocationRecoveryNodalKernel.md]), as for the grouped kernels. The
+[DefectDynamics](syntax/DefectDynamics/index.md) block builds all of them with
+[!param](/DefectDynamics/DefectDynamicsAction/tail) `= fokker_planck`.
 
 ## Representation
 
@@ -42,6 +46,36 @@ The Jacobian is written out by hand. With the limiter on, it includes the depend
 the two neighboring cells, taking the derivative of the one-sided estimate that minmod selects. It is
 exact except at the points where the selection changes.
 
+## Two coupled families id=two-families
+
+With [!param](/NodalKernels/ContinuumLoopNodalKernel/opposite_coupled_var), the loops also shrink by
+absorbing a monomer of the other point-defect type, and the monomer balance of each family loses
+what the other family's loops absorb (Pokor et al. 2004, Eqs. 2 and 3). The shrinking flux
+$-\beta^{\mathrm{opp}}_{n+1} C^{\mathrm{opp}}_1 C_{n+1}$ has its own upwinding, since its drift is
+always toward smaller sizes, and shares the limited slopes of the self-reaction flux. The two
+families must have the same layout (the same
+[!param](/NodalKernels/ContinuumLoopNodalKernel/num_cluster_sizes),
+[!param](/NodalKernels/ContinuumLoopNodalKernel/switch_size) and cell widths).
+
+The absorption coefficient of this family's loops for the opposite monomer is $2 \pi r_n Z_{\mathrm{opp}}(n)
+D_{\mathrm{opp}} / V_{at}$, with the radius of this family's loops and the diffusivity of the
+opposite monomer, set by [!param](/NodalKernels/ContinuumLoopNodalKernel/opposite_D0),
+[!param](/NodalKernels/ContinuumLoopNodalKernel/opposite_Em_eV),
+[!param](/NodalKernels/ContinuumLoopNodalKernel/opposite_Z),
+[!param](/NodalKernels/ContinuumLoopNodalKernel/opposite_Z_loop) and
+[!param](/NodalKernels/ContinuumLoopNodalKernel/opposite_alpha). The opposite family's loops absorb
+this family's monomer with the radius set by
+[!param](/NodalKernels/ContinuumLoopNodalKernel/opposite_burgers_vector) and a bias that approaches
+[!param](/NodalKernels/ContinuumLoopNodalKernel/Z) with
+[!param](/NodalKernels/ContinuumLoopNodalKernel/partner_Z_loop) and
+[!param](/NodalKernels/ContinuumLoopNodalKernel/partner_alpha) (default: this family's own
+`Z_loop` and `alpha`). The two kernels must use one set of values for the same absorption event,
+which the [DefectDynamics](syntax/DefectDynamics/index.md) block ensures.
+
+The Jacobian between the two variables is written out too, so the preconditioner needs
+`off_diag_row` and `off_diag_column` for the two variables, and the memory warning for coupled array
+variables applies.
+
 ## Choosing the largest size and the time step
 
 The flux out of the last cell is zero, so a population that reaches the last cell piles up there.
@@ -59,6 +93,11 @@ In this example the loop family is discrete up to size 20 and a continuum up to 
 from an empty distribution with a constant monomer source and a linear sink.
 
 !listing test/tests/continuum_tail/continuum_loop_transient.i block=NodalKernels
+
+In this example two coupled families, each discrete up to size 20 and a continuum up to size 2000,
+shrink by absorbing each other's monomers. The kernel of the vacancy loops is shown.
+
+!listing test/tests/continuum_tail/continuum_pair_jacobian.i block=NodalKernels/vacancy_dyn
 
 !syntax parameters /NodalKernels/ContinuumLoopNodalKernel
 

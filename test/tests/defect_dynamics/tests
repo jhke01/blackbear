@@ -414,6 +414,76 @@
     design = 'DefectDynamicsAction.md DefectSpeciesAction.md GenericInterstitialLoopGroupedNodalKernel.md'
     requirement = 'BlackBear shall build a two-species grouped cluster-dynamics problem from a [DefectDynamics] block in which BOTH species use geometry = loop (e.g. a vacancy species modeled as a loop, following Pokor et al. 2004 Eqs 4a-4f, which treat vacancy and interstitial clusters identically), including opposite-species absorption and point-defect recombination between the two loop species, deriving every opposite-species kernel parameter from the other species own block exactly as it already does for one void and one loop species.'
   []
+  [defect_dynamics_fokker_planck_action]
+    type = CSVDiff
+    input = defect_dynamics_fokker_planck_action.i
+    csvdiff = 'defect_dynamics_fokker_planck_action_out.csv defect_dynamics_fokker_planck_action_DefectDynamics_size_distribution_csv_vacancy_size_distribution_0005.csv'
+    design = 'DefectDynamicsAction.md DefectSpeciesAction.md ContinuumLoopNodalKernel.md'
+    requirement = 'BlackBear shall build a two-species cluster-dynamics problem whose large cluster sizes are a Fokker-Planck continuum (tail = fokker_planck) from a [DefectDynamics] block, with cascade seeding, a recovering dislocation sink, recombination and opposite-species absorption, the monomer and resolvable-population postprocessors, and the size distribution at the requested times.'
+  []
+  [defect_dynamics_fokker_planck_hand]
+    type = CSVDiff
+    input = defect_dynamics_fokker_planck_hand.i
+    csvdiff = 'defect_dynamics_fokker_planck_hand_out.csv'
+    design = 'ContinuumLoopNodalKernel.md'
+    requirement = 'BlackBear shall solve a vacancy and an interstitial loop family with a Fokker-Planck continuum tail built from ContinuumLoopNodalKernel, CascadeSpectrumNodalKernel, DislocationRecoveryNodalKernel and PointDefectRecombinationNodalKernel, giving the reference solution that the [DefectDynamics] action reproduces with tail = fokker_planck.'
+  []
+  [defect_dynamics_fokker_planck_void_error]
+    type = RunException
+    input = defect_dynamics_fokker_planck_action.i
+    cli_args = "DefectDynamics/vacancy/geometry=void"
+    expect_err = "supports loop species only"
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall error when a [DefectDynamics] block with tail = fokker_planck has a void species, since the continuum tail is implemented for loops.'
+  []
+  [defect_dynamics_fokker_planck_binding_table_error]
+    type = RunException
+    input = defect_dynamics_fokker_planck_action.i
+    cli_args = "DefectDynamics/vacancy/binding_energy_model=binding_energy_table DefectDynamics/vacancy/binding_energy_table_eV='0.5 0.6'"
+    expect_err = "supports only the capillary binding-energy model"
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall error when a [DefectDynamics] block with tail = fokker_planck has a species that uses a binding-energy table.'
+  []
+  [defect_dynamics_fokker_planck_grouping_parameter_error]
+    type = RunException
+    input = defect_dynamics_fokker_planck_action.i
+    cli_args = "DefectDynamics/vacancy/explicit_max=50"
+    expect_err = "which only applies to tail = grouping"
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall error when a species of a [DefectDynamics] block with tail = fokker_planck sets a grouping parameter, which would otherwise be silently ignored.'
+  []
+  [defect_dynamics_fokker_planck_unequal_sizes_error]
+    type = RunException
+    input = defect_dynamics_fokker_planck_action.i
+    cli_args = "DefectDynamics/vacancy/num_cluster_sizes=1500"
+    expect_err = "needs the same maximum cluster size for both species"
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall error when the two species of a [DefectDynamics] block with tail = fokker_planck have different maximum cluster sizes, since each family reads the cells of the other.'
+  []
+  [defect_dynamics_fokker_planck_switch_size_error]
+    type = RunException
+    input = defect_dynamics_fokker_planck_action.i
+    cli_args = "DefectDynamics/switch_size=3000"
+    expect_err = "must be smaller than the maximum cluster size of every species"
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall error when the switch_size of a [DefectDynamics] block with tail = fokker_planck is not below the maximum cluster size of a species.'
+  []
+  [defect_dynamics_fokker_planck_cascade_switch_size_error]
+    type = RunException
+    input = defect_dynamics_fokker_planck_action.i
+    cli_args = "DefectDynamics/switch_size=3"
+    expect_err = "must be at least 4 when species"
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall error when a species with cascade seeding is used with a switch_size below 4, since the seeded sizes 2 to 4 must be individual unknowns.'
+  []
+  [defect_dynamics_fokker_planck_switch_size_unused_warning]
+    type = RunApp
+    input = defect_dynamics_species_grouping_action.i
+    cli_args = "DefectDynamics/switch_size=50"
+    expect_out = "has no effect with tail = grouping"
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall warn when a continuum parameter such as switch_size is set for a [DefectDynamics] block with tail = grouping, where it has no effect.'
+  []
   [defect_dynamics_two_void_species_error]
     type = RunException
     input = defect_dynamics_different_cluster_sizes_action.i
