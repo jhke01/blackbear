@@ -7,6 +7,67 @@
     csvdiff = 'solute_only_action_out.csv'
     requirement = 'BlackBear shall build a solute-clustering ("Cu-precipitation") problem from a [SoluteClusterDynamics] block with no [DefectDynamics] block present, generating the array variable, initial condition, time-derivative kernel, and ClusterDynamicsGroupedNodalKernel instance from the physical parameters given instead of requiring [GroupedVariables]/[NodalKernels] to be hand-typed, and leaving the point-defect coupling inactive.'
   []
+  [solute_continuum_action]
+    type = CSVDiff
+    input = solute_continuum_action.i
+    csvdiff = 'solute_continuum_action_out.csv'
+    design = 'SoluteClusterDynamicsAction.md ContinuumClusterDynamicsNodalKernel.md'
+    requirement = 'BlackBear shall build a solute-clustering problem whose large cluster sizes are a Fokker-Planck continuum (tail = fokker_planck) from a [SoluteClusterDynamics] block, with the monomer, total-density and resolvable-population postprocessors.'
+  []
+  [solute_continuum_hand]
+    type = CSVDiff
+    input = solute_continuum_hand.i
+    csvdiff = 'solute_continuum_hand_out.csv'
+    design = 'ContinuumClusterDynamicsNodalKernel.md'
+    requirement = 'BlackBear shall solve a solute-clustering problem built from ContinuumClusterDynamicsNodalKernel, giving the reference solution that the [SoluteClusterDynamics] action reproduces with tail = fokker_planck.'
+  []
+  [solute_continuum_defect_coupled_action]
+    type = CSVDiff
+    input = solute_continuum_defect_coupled_action.i
+    csvdiff = 'solute_continuum_defect_coupled_action_out.csv'
+    design = 'SoluteClusterDynamicsAction.md ContinuumClusterDynamicsNodalKernel.md'
+    requirement = 'BlackBear shall couple a continuum solute array (tail = fokker_planck) to the vacancy species of a [DefectDynamics] block present in the same input, wiring vacancy_coupled_var and vacancy_formation_energy_eV onto the continuum kernel, with the solute monomer concentration equal to that of the grouped array and 0.1 percent below its value without the coupling.'
+  []
+  [solute_continuum_grouping_parameter_error]
+    type = RunException
+    input = solute_continuum_action.i
+    cli_args = "SoluteClusterDynamics/explicit_max=50"
+    expect_err = "only applies to tail = grouping"
+    design = 'SoluteClusterDynamicsAction.md'
+    requirement = 'BlackBear shall error when a [SoluteClusterDynamics] block with tail = fokker_planck sets a grouping parameter, which would otherwise be silently ignored.'
+  []
+  [solute_continuum_table_error]
+    type = RunException
+    input = solute_continuum_action.i
+    cli_args = "SoluteClusterDynamics/binding_energy_model=binding_energy_table SoluteClusterDynamics/binding_energy_table_eV='0.1 0.2'"
+    expect_err = "supports only the interfacial_energy and capillary"
+    design = 'SoluteClusterDynamicsAction.md'
+    requirement = 'BlackBear shall error when a [SoluteClusterDynamics] block with tail = fokker_planck uses a binding-energy table.'
+  []
+  [solute_continuum_switch_size_error]
+    type = RunException
+    input = solute_continuum_action.i
+    cli_args = "SoluteClusterDynamics/switch_size=2000"
+    expect_err = "must be smaller than num_cluster_sizes"
+    design = 'SoluteClusterDynamicsAction.md'
+    requirement = 'BlackBear shall error when the switch_size of a continuum [SoluteClusterDynamics] block is not below num_cluster_sizes.'
+  []
+  [solute_continuum_resolvable_warning]
+    type = RunApp
+    input = solute_continuum_action.i
+    cli_args = "SoluteClusterDynamics/switch_size=20 SoluteClusterDynamics/resolvable_radius=1e-9"
+    expect_out = "at which clusters become resolvable"
+    design = 'SoluteClusterDynamicsAction.md'
+    requirement = 'BlackBear shall warn when the switch_size of a continuum [SoluteClusterDynamics] block is below the size at which clusters become resolvable.'
+  []
+  [solute_grouping_switch_size_warning]
+    type = RunApp
+    input = solute_only_action.i
+    cli_args = "SoluteClusterDynamics/switch_size=50"
+    expect_out = "has no effect with tail = grouping"
+    design = 'SoluteClusterDynamicsAction.md'
+    requirement = 'BlackBear shall warn when a continuum parameter such as switch_size is set for a [SoluteClusterDynamics] block with tail = grouping.'
+  []
   [solute_defect_coupled_action]
     type = CSVDiff
     input = solute_defect_coupled_action.i

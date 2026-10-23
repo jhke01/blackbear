@@ -55,6 +55,32 @@ SoluteClusterDynamicsAction::validParams()
   params.addParam<Real>("sink", 0.0, "Linear sink coefficient k_s for monomer loss (leave at "
                         "zero for solute clustering such as Cu precipitation).");
 
+  params.addParam<MooseEnum>(
+      "tail",
+      MooseEnum("grouping fokker_planck", "grouping"),
+      "How the large cluster sizes are stored. 'grouping' (default): bins with a linear "
+      "reconstruction, set by explicit_max and the group_* parameters. 'fokker_planck': sizes up to "
+      "switch_size are individual unknowns and larger sizes are finite-volume cells of a "
+      "Fokker-Planck continuum (Pokor et al. 2004, Section 4.1), set by switch_size and the "
+      "continuum_* parameters. Supports the interfacial_energy and capillary binding-energy "
+      "models, not the tables.");
+  params.addParam<unsigned int>("switch_size",
+                                200,
+                                "Largest cluster size that is an individual unknown when tail = "
+                                "fokker_planck; larger sizes are continuum cells.");
+  params.addParam<Real>("continuum_initial_width",
+                        1.0,
+                        "Width of the first continuum cell when tail = fokker_planck.");
+  params.addParam<Real>("continuum_width_ratio",
+                        1.04,
+                        "Growth factor of the cell width from one cell to the next when tail = "
+                        "fokker_planck.");
+  params.addParam<bool>("continuum_limiter",
+                        true,
+                        "Reconstruct the cell values at a face with a minmod-limited slope "
+                        "(second order) when tail = fokker_planck; if false the cell averages are "
+                        "used (first-order upwind).");
+
   params.addRequiredParam<unsigned int>(
       "num_cluster_sizes", "Maximum physical cluster size represented by the grouped array.");
   params.addParam<bool>(
@@ -184,6 +210,81 @@ SoluteClusterDynamicsAction::SoluteClusterDynamicsAction(const InputParameters &
 {
 }
 
+bool
+SoluteClusterDynamicsAction::usesContinuumTail() const
+{
+  return getParam<MooseEnum>("tail") == "fokker_planck";
+}
+
+ClusterContinuumLayout
+SoluteClusterDynamicsAction::continuumLayout() const
+{
+  return ClusterContinuumLayout(getParam<unsigned int>("num_cluster_sizes"),
+                                getParam<unsigned int>("switch_size"),
+                                getParam<Real>("continuum_initial_width"),
+                                getParam<Real>("continuum_width_ratio"));
+}
+
+void
+SoluteClusterDynamicsAction::validateTail() const
+{
+  const char * continuum_params[] = {
+      "switch_size", "continuum_initial_width", "continuum_width_ratio", "continuum_limiter"};
+  if (!usesContinuumTail())
+  {
+    for (const auto * name : continuum_params)
+      if (parameters().isParamSetByUser(name))
+        paramWarning(name, name, " has no effect with tail = grouping.");
+    return;
+  }
+
+  const char * grouping_params[] = {"use_grouping",
+                                    "explicit_max",
+                                    "group_spacing",
+                                    "group_linear_width",
+                                    "group_geometric_ratio",
+                                    "enforce_group_nonnegative",
+                                    "group_nonnegative_tolerance_factor"};
+  for (const auto * name : grouping_params)
+    if (parameters().isParamSetByUser(name))
+      paramError(name, name, " only applies to tail = grouping.");
+
+  const auto binding = getParam<MooseEnum>("binding_energy_model");
+  if (getParam<MooseEnum>("rate_model") == "interfacial_energy" &&
+      (binding == "binding_energy_table" || binding == "formation_energy_table"))
+    paramError("binding_energy_model",
+               "tail = fokker_planck supports only the interfacial_energy and capillary "
+               "binding-energy models, not the tables.");
+  if (getParam<unsigned int>("switch_size") < 2)
+    paramError("switch_size", "must be at least 2.");
+  if (getParam<unsigned int>("switch_size") >= getParam<unsigned int>("num_cluster_sizes"))
+    paramError("switch_size", "must be smaller than num_cluster_sizes.");
+  if (getParam<Real>("continuum_initial_width") <= 0.0)
+    paramError("continuum_initial_width", "must be positive.");
+  if (getParam<Real>("continuum_width_ratio") < 1.0)
+    paramError("continuum_width_ratio", "must be at least 1.");
+
+  // The resolvable population starts at the size n_min of the smallest resolvable radius. When n_min
+  // lies above switch_size it falls inside a continuum cell and the resolvable density is only as
+  // accurate as the cut of that cell.
+  const Real resolvable_radius = getParam<Real>("resolvable_radius");
+  const Real atomic_volume = getParam<Real>("atomic_volume");
+  if (resolvable_radius > 0.0 && atomic_volume > 0.0)
+  {
+    const Real r1 = std::cbrt(3.0 * atomic_volume / (4.0 * libMesh::pi));
+    const Real n_min = std::ceil(std::pow(resolvable_radius / r1, 3.0));
+    if (static_cast<Real>(getParam<unsigned int>("switch_size")) < n_min)
+      paramWarning("switch_size",
+                   "is below the size ",
+                   static_cast<unsigned int>(n_min),
+                   " at which clusters become resolvable (resolvable_radius), so the cut of the "
+                   "resolvable population falls inside a continuum cell and its density is less "
+                   "accurate. Use switch_size of at least ",
+                   static_cast<unsigned int>(n_min),
+                   ".");
+  }
+}
+
 std::string
 SoluteClusterDynamicsAction::variableName() const
 {
@@ -235,6 +336,9 @@ void
 SoluteClusterDynamicsAction::act()
 {
   if (_current_task == "add_variable")
+    validateTail();
+
+  if (_current_task == "add_variable")
     actAddVariables();
   else if (_current_task == "add_function")
     actAddFunctions();
@@ -249,6 +353,16 @@ SoluteClusterDynamicsAction::act()
 void
 SoluteClusterDynamicsAction::actAddVariables()
 {
+  if (usesContinuumTail())
+  {
+    InputParameters params = _factory.getValidParams("ArrayMooseVariable");
+    params.set<MooseEnum>("family") = "LAGRANGE";
+    params.set<MooseEnum>("order") = "FIRST";
+    params.set<unsigned int>("components") = continuumLayout().componentCount();
+    _problem->addVariable("ArrayMooseVariable", variableName(), params);
+    return;
+  }
+
   const ClusterGroupingLayout layout(getParam<unsigned int>("num_cluster_sizes"),
                                      getParam<unsigned int>("explicit_max"),
                                      getParam<bool>("use_grouping"),
@@ -277,6 +391,17 @@ SoluteClusterDynamicsAction::actAddFunctions()
 void
 SoluteClusterDynamicsAction::actAddICs()
 {
+  if (usesContinuumTail())
+  {
+    // Only the monomer is populated: component 0 reads the function at x = 0 and every other
+    // component reads it at x >= 1, where it is zero
+    InputParameters params = _factory.getValidParams("ArrayFunctionIndexIC");
+    params.set<VariableName>("variable") = variableName();
+    params.set<FunctionName>("function") = functionName();
+    _problem->addInitialCondition("ArrayFunctionIndexIC", name() + "_ic", params);
+    return;
+  }
+
   InputParameters params = _factory.getValidParams("GroupedArrayFunctionIndexIC");
   params.set<VariableName>("variable") = variableName();
   params.set<FunctionName>("function") = functionName();
@@ -300,19 +425,31 @@ SoluteClusterDynamicsAction::actAddNodalKernels()
     _problem->addNodalKernel("ArrayTimeDerivativeNodalKernel", name() + "_dot", params);
   }
 
-  InputParameters params = _factory.getValidParams("ClusterDynamicsGroupedNodalKernel");
+  const std::string kernel_type =
+      usesContinuumTail() ? "ContinuumClusterDynamicsNodalKernel" : "ClusterDynamicsGroupedNodalKernel";
+  InputParameters params = _factory.getValidParams(kernel_type);
   params.set<NonlinearVariableName>("variable") = var_name;
   params.set<Real>("generation") = getParam<Real>("generation");
   params.set<Real>("sink") = getParam<Real>("sink");
   params.set<unsigned int>("num_cluster_sizes") = getParam<unsigned int>("num_cluster_sizes");
-  params.set<bool>("use_grouping") = getParam<bool>("use_grouping");
-  params.set<unsigned int>("explicit_max") = getParam<unsigned int>("explicit_max");
-  params.set<MooseEnum>("group_spacing") = getParam<MooseEnum>("group_spacing");
-  params.set<unsigned int>("group_linear_width") = getParam<unsigned int>("group_linear_width");
-  params.set<Real>("group_geometric_ratio") = getParam<Real>("group_geometric_ratio");
-  params.set<bool>("enforce_group_nonnegative") = getParam<bool>("enforce_group_nonnegative");
-  params.set<Real>("group_nonnegative_tolerance_factor") =
-      getParam<Real>("group_nonnegative_tolerance_factor");
+  if (usesContinuumTail())
+  {
+    params.set<unsigned int>("switch_size") = getParam<unsigned int>("switch_size");
+    params.set<Real>("continuum_initial_width") = getParam<Real>("continuum_initial_width");
+    params.set<Real>("continuum_width_ratio") = getParam<Real>("continuum_width_ratio");
+    params.set<bool>("use_limiter") = getParam<bool>("continuum_limiter");
+  }
+  else
+  {
+    params.set<bool>("use_grouping") = getParam<bool>("use_grouping");
+    params.set<unsigned int>("explicit_max") = getParam<unsigned int>("explicit_max");
+    params.set<MooseEnum>("group_spacing") = getParam<MooseEnum>("group_spacing");
+    params.set<unsigned int>("group_linear_width") = getParam<unsigned int>("group_linear_width");
+    params.set<Real>("group_geometric_ratio") = getParam<Real>("group_geometric_ratio");
+    params.set<bool>("enforce_group_nonnegative") = getParam<bool>("enforce_group_nonnegative");
+    params.set<Real>("group_nonnegative_tolerance_factor") =
+        getParam<Real>("group_nonnegative_tolerance_factor");
+  }
   params.set<MooseEnum>("rate_model") = getParam<MooseEnum>("rate_model");
   params.set<Real>("beta0") = getParam<Real>("beta0");
   params.set<Real>("alpha0") = getParam<Real>("alpha0");
@@ -322,7 +459,9 @@ SoluteClusterDynamicsAction::actAddNodalKernels()
   params.set<Real>("D0") = getParam<Real>("D0");
   params.set<Real>("Q_eV") = getParam<Real>("Q_eV");
   params.set<Real>("radiation_enhanced_factor") = getParam<Real>("radiation_enhanced_factor");
-  params.set<MooseEnum>("binding_energy_model") = getParam<MooseEnum>("binding_energy_model");
+  // validateTail() has rejected the tables for the continuum, whose kernel has only the first two
+  params.set<MooseEnum>("binding_energy_model") =
+      std::string(getParam<MooseEnum>("binding_energy_model"));
   params.set<Real>("sigma") = getParam<Real>("sigma");
   params.set<Real>("atomic_volume") = getParam<Real>("atomic_volume");
   params.set<Real>("Omega_kB_K") = getParam<Real>("Omega_kB_K");
@@ -334,10 +473,13 @@ SoluteClusterDynamicsAction::actAddNodalKernels()
   params.set<Real>("binding_energy_coefficient_eV") =
       getParam<Real>("binding_energy_coefficient_eV");
   params.set<Real>("binding_energy_exponent") = getParam<Real>("binding_energy_exponent");
-  params.set<std::vector<Real>>("binding_energy_table_eV") =
-      getParam<std::vector<Real>>("binding_energy_table_eV");
-  params.set<std::vector<Real>>("formation_energy_table_eV") =
-      getParam<std::vector<Real>>("formation_energy_table_eV");
+  if (!usesContinuumTail())
+  {
+    params.set<std::vector<Real>>("binding_energy_table_eV") =
+        getParam<std::vector<Real>>("binding_energy_table_eV");
+    params.set<std::vector<Real>>("formation_energy_table_eV") =
+        getParam<std::vector<Real>>("formation_energy_table_eV");
+  }
 
   const auto * vacancy = findVacancySpecies();
   if (vacancy)
@@ -362,7 +504,60 @@ SoluteClusterDynamicsAction::actAddNodalKernels()
     params.set<Real>("vacancy_formation_energy_eV") = formation_energy_eV;
   }
 
-  _problem->addNodalKernel("ClusterDynamicsGroupedNodalKernel", name() + "_dyn", params);
+  _problem->addNodalKernel(kernel_type, name() + "_dyn", params);
+}
+
+void
+SoluteClusterDynamicsAction::addContinuumPostprocessors()
+{
+  const std::string var_name = variableName();
+  const unsigned int num_cluster_sizes = getParam<unsigned int>("num_cluster_sizes");
+  const unsigned int switch_size = getParam<unsigned int>("switch_size");
+  const Real initial_width = getParam<Real>("continuum_initial_width");
+  const Real width_ratio = getParam<Real>("continuum_width_ratio");
+
+  {
+    // The monomer is array component 0 in either representation
+    InputParameters params = _factory.getValidParams("ClusterSizeConcentration");
+    params.set<std::vector<VariableName>>("clusters") = {var_name};
+    params.set<unsigned int>("n_size") = 1;
+    _problem->addPostprocessor("ClusterSizeConcentration", name() + "_monomer_concentration", params);
+  }
+
+  const Real atomic_volume = getParam<Real>("atomic_volume");
+  const Real r1 =
+      atomic_volume > 0.0 ? std::cbrt(3.0 * atomic_volume / (4.0 * libMesh::pi)) : 1.0;
+
+  auto addMoment = [&](const std::string & postprocessor_name,
+                       const std::string & quantity,
+                       unsigned int n_minimum)
+  {
+    InputParameters params = _factory.getValidParams("ClusterContinuumMoment");
+    params.set<std::vector<VariableName>>("clusters") = {var_name};
+    params.set<MooseEnum>("quantity") = quantity;
+    params.set<unsigned int>("num_cluster_sizes") = num_cluster_sizes;
+    params.set<unsigned int>("switch_size") = switch_size;
+    params.set<Real>("continuum_initial_width") = initial_width;
+    params.set<Real>("continuum_width_ratio") = width_ratio;
+    params.set<unsigned int>("n_minimum") = n_minimum;
+    if (atomic_volume > 0.0)
+      params.set<Real>("atomic_volume") = atomic_volume;
+    params.set<Real>("r1") = r1;
+    params.set<Real>("radius_exponent") = 1.0 / 3.0;
+    _problem->addPostprocessor("ClusterContinuumMoment", postprocessor_name, params);
+  };
+
+  addMoment(name() + "_total_density", "density", getParam<unsigned int>("density_n_minimum"));
+
+  const Real resolvable_radius = getParam<Real>("resolvable_radius");
+  if (resolvable_radius <= 0.0)
+    return;
+  if (atomic_volume <= 0.0)
+    paramError("resolvable_radius", "requires atomic_volume > 0, to convert the radius to a size.");
+  const unsigned int n_minimum =
+      static_cast<unsigned int>(std::ceil(std::pow(resolvable_radius / r1, 3.0)));
+  addMoment(name() + "_resolvable_density", "density", n_minimum);
+  addMoment(name() + "_resolvable_avg_radius", "average_radius", n_minimum);
 }
 
 void
@@ -370,6 +565,12 @@ SoluteClusterDynamicsAction::actAddPostprocessors()
 {
   const std::string var_name = variableName();
   const unsigned int num_cluster_sizes = getParam<unsigned int>("num_cluster_sizes");
+
+  if (usesContinuumTail())
+  {
+    addContinuumPostprocessors();
+    return;
+  }
   const bool use_grouping = getParam<bool>("use_grouping");
   const unsigned int explicit_max = getParam<unsigned int>("explicit_max");
   const auto group_spacing = getParam<MooseEnum>("group_spacing");

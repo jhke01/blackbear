@@ -99,6 +99,34 @@ technique can see, and adds the outputs `<name>_resolvable_density` and
 [!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/atomic_volume) to convert the radius to
 a cluster size. It replaces the older `density_n_minimum`, which still works but is deprecated.
 
+## Fokker-Planck Continuum Tail
+
+Instead of grouping the large sizes in bins, the solute array can store them as a Fokker-Planck
+continuum (Pokor et al. 2004, Section 4.1) by setting
+[!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/tail) `= fokker_planck`. Sizes up to
+[!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/switch_size) are individual unknowns, and larger
+sizes are finite-volume cells that start at `switch_size` + 1/2 with the width
+[!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/continuum_initial_width) and grow by
+[!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/continuum_width_ratio) from one cell to the next.
+The block then builds a [ContinuumClusterDynamicsNodalKernel.md] in place of the grouped kernel, the monomer
+postprocessor reads the array's first component, and the densities and the mean radius come from
+[ClusterContinuumMoment.md]. The automatic coupling to the vacancies of a `[DefectDynamics]` block works as
+for the grouped array.
+
+The grouping parameters (`use_grouping`, `explicit_max`, `group_*`) are not allowed with the continuum, and the
+binding-energy tables are not supported (`interfacial_energy` and `capillary` are). The block warns when
+`switch_size` is below the size at which clusters become resolvable
+([!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/resolvable_radius)), because the cut of the
+resolvable population then falls inside a continuum cell.
+
+The continuum is useful where the memory of the grouped array matters: the cost of the Jacobian storage grows
+with the square of the number of unknowns of all the arrays of the problem, and the continuum needs far fewer
+unknowns for the same accuracy of the point-defect populations of [DefectDynamics/index.md]. For the Cu
+precipitation benchmark with 100,000 sizes, which the grouped array already represents with 338 unknowns, the
+continuum (311 to 584 unknowns) needs about the same memory and time (30 MB, 2 s), and it follows the SUNDIALS
+reference more closely over the run: the median deviation after 1 s is 1.7 percent in the monomer, 4.3 percent in
+the density and 1.4 percent in the radius, against 3.7, 9.1 and 5.3 percent for the grouped array.
+
 ## Example Input Syntax
 
 In this example, no `[DefectDynamics]` block is present, so a solute-only study is built with the
@@ -111,4 +139,6 @@ coupling simply inactive.
 ## See Also
 
 - [GenericClusterDynamicsGroupedNodalKernel.md]
+- [ContinuumClusterDynamicsNodalKernel.md]
+- [ClusterContinuumMoment.md]
 - [DefectDynamics/index.md]

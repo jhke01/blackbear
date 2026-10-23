@@ -15,6 +15,7 @@
 #pragma once
 
 #include "Action.h"
+#include "ClusterContinuumLayout.h"
 
 class DefectSpeciesAction;
 
@@ -45,12 +46,25 @@ public:
 
   virtual void act() override;
 
+  /// Whether the large cluster sizes are a Fokker-Planck continuum (tail = fokker_planck) instead
+  /// of grouped bins
+  bool usesContinuumTail() const;
+
 protected:
+  /// Errors for every setting that tail = fokker_planck does not support, and warns about settings
+  /// that only apply to the other representation
+  void validateTail() const;
+
+  /// The layout of the array when tail = fokker_planck
+  ClusterContinuumLayout continuumLayout() const;
+
   void actAddVariables();
   void actAddFunctions();
   void actAddICs();
   void actAddNodalKernels();
   void actAddPostprocessors();
+  /// The postprocessors of the tail = fokker_planck array
+  void addContinuumPostprocessors();
 
   /// The array variable name this block builds, "<block name>_clusters".
   std::string variableName() const;
