@@ -78,7 +78,8 @@ ClusterContinuumMoment::ClusterContinuumMoment(const InputParameters & parameter
             getParam<Real>("continuum_width_ratio")),
     _number(0.0),
     _content(0.0),
-    _radius_weighted(0.0)
+    _radius_weighted(0.0),
+    _count(0.0)
 {
   if (_atomic_volume <= 0.0)
     paramError("atomic_volume", "must be positive.");
@@ -99,6 +100,7 @@ ClusterContinuumMoment::initialize()
   _number = 0.0;
   _content = 0.0;
   _radius_weighted = 0.0;
+  _count = 0.0;
 }
 
 void
@@ -127,6 +129,7 @@ ClusterContinuumMoment::execute()
     _content += c * powerIntegral(left, cell.right, 1.0);
     _radius_weighted += c * _r1 * powerIntegral(left, cell.right, _radius_exponent);
   }
+  _count += 1.0;
 }
 
 void
@@ -135,6 +138,7 @@ ClusterContinuumMoment::finalize()
   gatherSum(_number);
   gatherSum(_content);
   gatherSum(_radius_weighted);
+  gatherSum(_count);
 }
 
 void
@@ -144,6 +148,7 @@ ClusterContinuumMoment::threadJoin(const UserObject & y)
   _number += rhs._number;
   _content += rhs._content;
   _radius_weighted += rhs._radius_weighted;
+  _count += rhs._count;
 }
 
 Real
@@ -152,9 +157,9 @@ ClusterContinuumMoment::getValue() const
   switch (_quantity)
   {
     case Quantity::DENSITY:
-      return _number / _atomic_volume;
+      return _count > 0.0 ? _number / (_count * _atomic_volume) : 0.0;
     case Quantity::CONTENT:
-      return _content / _atomic_volume;
+      return _count > 0.0 ? _content / (_count * _atomic_volume) : 0.0;
     case Quantity::AVERAGE_RADIUS:
       return _number > 0.0 ? _radius_weighted / _number : 0.0;
   }

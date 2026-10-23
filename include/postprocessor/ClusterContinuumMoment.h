@@ -55,8 +55,11 @@ protected:
   const Real _atomic_volume;
   const ClusterContinuumLayout _layout;
 
-  /// sum of C_n (the number of clusters), sum of n C_n, and sum of r_n C_n
+  /// sum of C_n (the number of clusters), sum of n C_n, and sum of r_n C_n, each added over the nodes
   Real _number;
   Real _content;
   Real _radius_weighted;
+  /// Number of nodes added, so that the density and the content are node averages like those of the
+  /// grouped postprocessors
+  Real _count;
 };

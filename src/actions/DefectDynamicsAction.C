@@ -262,6 +262,26 @@ DefectDynamicsAction::validateTail() const
                  "' has ",
                  n,
                  ".");
+    // The resolvable population starts at the size n_min of the smallest resolvable radius. When n_min lies above switch_size it falls
+    // inside a continuum cell, which is cut there with the cell average, and the resolvable density is then only as accurate as that cut
+    // (a 34 percent error in the void density at switch_size 100 against n_min = 152, 0.3 percent at 160).
+    if (sp->getParam<Real>("resolvable_radius") > 0.0)
+    {
+      Real r1, radius_exponent;
+      sp->monomerRadiusLaw(atomic_volume, lattice_parameter, r1, radius_exponent);
+      const unsigned int n_min = DefectSpeciesAction::clusterSizeFromRadius(
+          sp->getParam<Real>("resolvable_radius"), r1, radius_exponent);
+      if (getParam<unsigned int>("switch_size") < n_min)
+        paramWarning("switch_size",
+                     "is below the size ",
+                     n_min,
+                     " at which species '",
+                     sp->name(),
+                     "' becomes resolvable (resolvable_radius), so the cut of its resolvable population falls inside a continuum "
+                     "cell and its resolvable density is less accurate. Use switch_size of at least ",
+                     n_min,
+                     ".");
+    }
     const bool cascade = sp->getParam<Real>("cascade_f2") + sp->getParam<Real>("cascade_f3") +
                              sp->getParam<Real>("cascade_f4") >
                          0.0;

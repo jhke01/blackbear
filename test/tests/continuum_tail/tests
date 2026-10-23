@@ -32,6 +32,24 @@
     design = 'ClusterContinuumDistribution.md'
     requirement = 'BlackBear shall report the size distribution of a cluster variable that is discrete up to a switch size and a continuum above it, with the size, the width of the size interval, the concentration per unit size and the radius of every discrete size and continuum cell.'
   []
+  [continuum_solute_jacobian]
+    type = PetscJacobianTester
+    input = continuum_solute_jacobian.i
+    run_sim = True
+    ratio_tol = 1e-7
+    difference_tol = 1e6
+    design = 'ContinuumClusterDynamicsNodalKernel.md'
+    requirement = 'BlackBear shall provide a Jacobian for the solute-clustering kernel whose large sizes are a Fokker-Planck continuum, including the dependence of the minmod-limited face values on the neighboring cells, that agrees with a finite difference of its residual.'
+  []
+  [continuum_solute_vacancy_jacobian]
+    type = PetscJacobianTester
+    input = continuum_solute_vacancy_jacobian.i
+    run_sim = True
+    ratio_tol = 1e-7
+    difference_tol = 1e6
+    design = 'ContinuumClusterDynamicsNodalKernel.md'
+    requirement = 'BlackBear shall provide the off-diagonal Jacobian column of a coupled vacancy monomer for the continuum solute-clustering kernel, whose monomer diffusivity is scaled by the vacancy supersaturation.'
+  []
   [continuum_loop_transient]
     type = CSVDiff
     input = continuum_loop_transient.i

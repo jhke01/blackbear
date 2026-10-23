@@ -416,6 +416,8 @@
   []
   [defect_dynamics_fokker_planck_action]
     type = CSVDiff
+    # switch_size 20 is below the size at which the species become resolvable, which warns by design in this small problem
+    allow_warnings = true
     input = defect_dynamics_fokker_planck_action.i
     csvdiff = 'defect_dynamics_fokker_planck_action_out.csv defect_dynamics_fokker_planck_action_DefectDynamics_size_distribution_csv_vacancy_size_distribution_0005.csv'
     design = 'DefectDynamicsAction.md DefectSpeciesAction.md ContinuumLoopNodalKernel.md'
@@ -430,6 +432,8 @@
   []
   [defect_dynamics_fokker_planck_void_action]
     type = CSVDiff
+    # switch_size 20 is below the size at which the species become resolvable, which warns by design in this small problem
+    allow_warnings = true
     input = defect_dynamics_fokker_planck_void_action.i
     csvdiff = 'defect_dynamics_fokker_planck_void_action_out.csv defect_dynamics_fokker_planck_void_action_DefectDynamics_size_distribution_csv_vacancy_size_distribution_0004.csv'
     design = 'DefectDynamicsAction.md DefectSpeciesAction.md ContinuumLoopNodalKernel.md'
@@ -441,6 +445,13 @@
     csvdiff = 'defect_dynamics_fokker_planck_void_hand_out.csv'
     design = 'ContinuumLoopNodalKernel.md'
     requirement = 'BlackBear shall solve a vacancy void family and an interstitial loop family with a Fokker-Planck continuum tail built from ContinuumLoopNodalKernel with geometry and opposite_geometry, giving the reference solution that the [DefectDynamics] action reproduces for a void and a loop with tail = fokker_planck.'
+  []
+  [defect_dynamics_fokker_planck_switch_size_resolvable_warning]
+    type = RunApp
+    input = defect_dynamics_fokker_planck_action.i
+    expect_out = "is below the size 32 at which species"
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall warn when the switch_size of a [DefectDynamics] block with tail = fokker_planck is below the size at which a species with resolvable_radius becomes resolvable, since the cut of its resolvable population then falls inside a continuum cell.'
   []
   [defect_dynamics_fokker_planck_binding_table_error]
     type = RunException

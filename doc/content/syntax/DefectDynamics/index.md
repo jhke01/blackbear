@@ -125,6 +125,56 @@ factors of 2 to 6.
 The time to reach the first resolvable loops is a steep onset, so the time step must be limited
 (for example with a `timestep_limiting_postprocessor` of $0.01\,t + 0.5$ s) to resolve it.
 
+## Time Step for the Onset of the Resolvable Population
+
+The resolvable population (the clusters above the smallest radius a microscope can see, [!param](/DefectDynamics/DefectSpeciesAction/resolvable_radius)) rises
+by many orders of magnitude within a small interval of dose, from a density near zero to the reporting floor of $10^{12}$ m$^{-3}$ and
+beyond. A time step that is fixed by the time, such as `IterationAdaptiveDT` with a cap of $0.01\,t + 0.5$ s, cannot follow it:
+in the six Yang, MD and Pokor cases the density was off by up to a factor of 60 at the onset, whichever of grouping and
+`tail = fokker_planck` was used. Limiting the relative change of the resolvable densities per step, through a
+`timestep_limiting_postprocessor`, removes this. A recipe that limits the change of both species to a fraction `rel_target`
+(here 0.1) of the larger of their value and `dens_floor` (here 1) in one step, and keeps the old cap as an upper bound:
+
+```
+[Postprocessors]
+  [dt_now]
+    type = TimestepSize
+  []
+  [t_now]
+    type = TimePostprocessor
+  []
+  [d_void]
+    type = ChangeOverTimePostprocessor
+    postprocessor = vacancy_resolvable_density
+    take_absolute_value = true
+  []
+  [d_loop]
+    type = ChangeOverTimePostprocessor
+    postprocessor = interstitial_resolvable_density
+    take_absolute_value = true
+  []
+  [rel_change]
+    type = ParsedPostprocessor
+    pp_names = 'd_void d_loop vacancy_resolvable_density interstitial_resolvable_density'
+    constant_names = 'dens_floor'
+    constant_expressions = '1.0'
+    expression = 'max(d_void / max(vacancy_resolvable_density, dens_floor), d_loop / max(interstitial_resolvable_density, dens_floor))'
+  []
+  [dt_cap]
+    type = ParsedPostprocessor
+    pp_names = 'dt_now t_now rel_change'
+    constant_names = 'rel_target'
+    constant_expressions = '0.1'
+    expression = 'min(0.01 * t_now + 0.5, dt_now * rel_target / max(rel_change, 1e-12))'
+    execute_on = 'INITIAL TIMESTEP_END'
+  []
+[]
+```
+
+with `timestep_limiting_postprocessor = dt_cap` in the `IterationAdaptiveDT` block. A smaller `rel_target` follows the onset more closely
+and costs more steps. The species names of the postprocessors are those of a block with `resolvable_radius` set on both
+species (`vacancy_resolvable_density` and `interstitial_resolvable_density`).
+
 ## Dislocation Recovery
 
 By default, each species' dislocation sink uses a constant
