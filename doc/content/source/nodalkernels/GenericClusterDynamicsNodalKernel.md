@@ -318,8 +318,13 @@ pair, using the per-component names of the array variables:
 ```
 
 Declaring the pair makes MOOSE allocate storage for the coupling between every pair of the two
-arrays' components, which grows with the product of their sizes. See
-[PointDefectRecombinationNodalKernel.md] for the measured cost.
+arrays' components, which grows with the product of their sizes. In one irradiated test case
+with a vacancy coupling, the memory of a 3,000-size solute array went from about 0.1 GB to 2.2 GB
+and the run time from 2.0 s to 3.4 s; at 6,000 sizes it went from 0.1 GB to 4.0 GB and from 2.2 s
+to 8.6 s, and at 20,000 sizes the run could not start. The saving was about 4% of the nonlinear
+iterations. For large arrays, leave the pair out and accept the slower Newton convergence. See
+[PointDefectRecombinationNodalKernel.md] for the cost of the same declaration between two defect
+arrays.
 
 The `[Executioner]` block sets the PETSc fill-reducing ordering:
 
