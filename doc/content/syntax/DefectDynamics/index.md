@@ -210,7 +210,8 @@ vector postprocessors only, so the regular per-timestep scalar postprocessor his
 general `[Outputs]` block is completely unaffected; MOOSE's own naming convention produces one
 file per species per requested time, e.g.
 `<file_base>_<DefectDynamics-block-name>_size_distribution_csv_vacancy_size_distribution_0002.csv`
-for the second sync time. Within a grouped (large-$n$) bin, the reconstructed values lie on that
+for a requested time reached at time step 2 (the number in the name is the time step, not the
+position of the time in the list). Within a grouped (large-$n$) bin, the reconstructed values lie on that
 bin's own linear fit (its stored $L_0$/$L_1$ moments), so they are not independent data -- see
 [ClusterSizeDistributionGrouped.md] for the reconstruction formula.
 

@@ -11,11 +11,12 @@ kernel's equation to the rest of the defect-dynamics model.
 one defect family's monomer component (array component 0), coupled to the
 other family's own array variable through
 [!param](/NodalKernels/PointDefectRecombinationNodalKernel/coupled_var). It is
-the only object in the defect-dynamics model
+the object that adds recombination between the two families of the
+defect-dynamics model. The void and loop kernels
 ([GenericVacancyVoidGroupedNodalKernel.md],
-[GenericInterstitialLoopGroupedNodalKernel.md]) that couples the two families
-to each other; each kernel otherwise evolves only its own grouped array
-variable.
+[GenericInterstitialLoopGroupedNodalKernel.md]) couple the families only
+through the opposite-species absorption described on their pages, and each
+otherwise evolves its own grouped array variable.
 
 Recombination consumes one vacancy monomer and one interstitial monomer per
 event, at rate
@@ -57,11 +58,20 @@ preconditioner's coupling matrix must include the inter-variable block.
 `libMesh::System::variable_number()`, which does not recognize an array
 variable's logical name (only its per-component names, e.g.
 `vacancy_clusters_0`) -- a MOOSE-side limitation unrelated to this kernel.
-Until that is addressed upstream, `full = true` is the practical way to
-obtain a complete coupling matrix for two grouped array variables; see
-[GenericClusterDynamicsGroupedNodalKernel.md] for why `full = false` matters
-at production cluster-size counts for a single grouped variable, a
-consideration this kernel's two-variable coupling does not change.
+The per-component names can be used instead, for example
+`off_diag_row = 'vacancy_clusters_0 interstitial_clusters_0'` with
+`off_diag_column = 'interstitial_clusters_0 vacancy_clusters_0'` and `full = false`.
+`full = true` is the simpler choice for small problems.
+
+!alert warning title=Memory grows with the square of the cluster-size count
+Declaring the coupling between two grouped array variables, by either route, makes MOOSE
+allocate storage for the coupling between every pair of their array components. Measured
+with the opposite-species absorption active, 20,000 sizes per species took about 3.7 GB and
+14 s for two steps with `full = true`, against about 0.12 GB and 1.7 s with `full = false` and
+no cross-species block. Without the cross-species block, Newton's method uses an approximate
+Jacobian for the coupling between the families: it still converges to the same residual, but
+took more nonlinear iterations in the cases tried. For production-size problems, choose
+between the full Jacobian and the memory.
 
 ## Example Input Syntax
 

@@ -245,6 +245,14 @@
     design = 'GenericClusterDynamicsNodalKernel.md'
     requirement = 'BlackBear shall provide an analytical off-diagonal Jacobian for the ClusterDynamicsNodalKernel that captures the coupling of the monomer diffusivity to a DefectDynamics vacancy monomer concentration through vacancy_coupled_var.'
   []
+  [cluster_dynamics_jacobian_vacancy_coupling_pair]
+    type = PetscJacobianTester
+    input = cluster_dynamics_jacobian_vacancy_coupling_pair.i
+    run_sim = True
+    ratio_tol = 1e-8
+    design = 'GenericClusterDynamicsNodalKernel.md'
+    requirement = 'BlackBear shall assemble the vacancy off-diagonal Jacobian of the ClusterDynamicsNodalKernel with an SMP preconditioner that uses full = false, when the pair of the solute array and the vacancy array is named in off_diag_row and off_diag_column.'
+  []
   [cluster_dynamics_grouped_vacancy_coupling]
     type = CSVDiff
     input = cluster_dynamics_grouped_vacancy_coupling.i

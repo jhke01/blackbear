@@ -19,12 +19,13 @@
 class DefectSpeciesAction;
 
 /**
- * [SoluteClusterDynamics]: a user-facing front end to the Cu-precipitation ("solute cluster
- * dynamics") kernels, GenericClusterDynamicsGroupedNodalKernel and GenericClusterDynamicsNodalKernel.
- * One block builds the solute species' array variable, initial condition, time-derivative/
- * dynamics kernel, and monomer/total-density postprocessors, as a thin pass-through of the
- * kernel's own physical parameters -- unlike [DefectDynamics], the Cu kernel already derives its
- * own rate coefficients internally, so this action has little physics of its own to compute.
+ * [SoluteClusterDynamics]: a user-facing front end to the solute-clustering ("solute cluster
+ * dynamics") kernels, GenericClusterDynamicsGroupedNodalKernel and
+ * GenericClusterDynamicsNodalKernel. One block builds the solute species' array variable, initial
+ * condition, time-derivative/ dynamics kernel, and monomer/total-density postprocessors, as a thin
+ * pass-through of the kernel's own physical parameters -- unlike [DefectDynamics], the solute
+ * kernel already derives its own rate coefficients internally, so this action has little physics of
+ * its own to compute.
  *
  * This block's main value-add is automatic point-defect coupling: when a [DefectDynamics] block
  * is ALSO present in the same input, this action looks for its vacancy species (identified by

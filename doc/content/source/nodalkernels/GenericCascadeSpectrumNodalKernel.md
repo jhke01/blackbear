@@ -34,9 +34,11 @@ so that $n \times \text{source}(n) = G f_n$ contributes exactly its own fraction
 rate. This is a pure, state-independent, time-independent constant, so this kernel's Jacobian
 contribution is exactly zero and it is AD-safe and provided in both AD and non-AD variants.
 
-Cluster sizes 2, 3, and 4 are guaranteed to be explicit (ungrouped) array components whenever the
-coupled array variable represents at least 4 cluster sizes, which this kernel's constructor
-checks.
+The kernel writes to array components 1, 2, and 3 and takes them to be cluster sizes 2, 3, and 4.
+It sees only the number of components of the coupled variable, not its grouping, so its
+constructor can only check that there are at least 4. For a grouped variable, sizes 2 to 4 are
+explicit components only when `explicit_max` is at least 4; a hand-built input must make sure of
+that. The `[DefectDynamics]` action checks it for every species with a nonzero cascade fraction.
 
 ## Example Input Syntax
 

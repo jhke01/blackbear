@@ -296,7 +296,30 @@ When no `[Preconditioning]` block is given, MOOSE creates an `SMP` preconditione
 Each array component is a separate variable to the coupling matrix, so the default is a dense
 $N \times N$ coupling matrix whose construction and traversal dominate the setup time. The kernels
 add their Jacobian entries directly, and hash table assembly accepts entries outside the coupling
-pattern, so `full = false` loses no Jacobian entries.
+pattern, so `full = false` loses no entries of the kernel's own Jacobian block.
+
+The exception is the coupling to a vacancy variable through
+[!param](/NodalKernels/ClusterDynamicsNodalKernel/vacancy_coupled_var). MOOSE calls a kernel's
+off-diagonal Jacobian only for variable pairs that are in the coupling matrix, and `full = false`
+leaves out the pair of the solute array and the vacancy array. The solution is not affected, but
+the Newton iteration then runs without the derivative with respect to the vacancy concentration
+and needs more linear iterations (about twice as many in one test case). To keep it, name that
+pair, using the per-component names of the array variables:
+
+```
+[Preconditioning]
+  [smp]
+    type = SMP
+    full = false
+    off_diag_row = 'clusters_0'
+    off_diag_column = 'vacancy_clusters_0'
+  []
+[]
+```
+
+Declaring the pair makes MOOSE allocate storage for the coupling between every pair of the two
+arrays' components, which grows with the product of their sizes. See
+[PointDefectRecombinationNodalKernel.md] for the measured cost.
 
 The `[Executioner]` block sets the PETSc fill-reducing ordering:
 
