@@ -19,8 +19,13 @@
 #include "NonlinearSystemBase.h"
 
 #include "libmesh/coupling_matrix.h"
+#include "libmesh/dense_matrix.h"
 
 #include <petscsnes.h>
+
+#include <algorithm>
+#include <mutex>
+#include <set>
 
 namespace
 {
@@ -37,6 +42,30 @@ petscOption(::PetscOptions options,
       PETSC_COMM_SELF,
       PetscOptionsGetString(options, prefix.c_str(), name.c_str(), value, sizeof(value), &set));
   return set ? std::string(value) : fallback;
+}
+
+/// Estimated memory [bytes] above which the cross-variable storage warning is issued
+constexpr double cross_variable_warning_bytes = 1.0e9;
+
+/// Families of local Jacobian/residual block storage that MOOSE sizes by the square of the number
+/// of components (_sub_Kee, _sub_Keg, _sub_Ken, _sub_Kne, _sub_Knn, _sub_Kll, _sub_Kle, _sub_Kln,
+/// _sub_Kel and _sub_Knl in Assembly)
+constexpr unsigned int block_families = 10;
+
+/// True if a component of one variable is coupled to a component of a different variable
+bool
+hasCrossVariableCoupling(const libMesh::CouplingMatrix & cm, NonlinearSystemBase & nl)
+{
+  for (const auto * var : nl.getVariables(0))
+  {
+    const unsigned int first = var->number();
+    const unsigned int last = first + var->count();
+    for (unsigned int component = first; component < last; ++component)
+      for (const auto other : libMesh::ConstCouplingRow(component, cm))
+        if (other < first || other >= last)
+          return true;
+  }
+  return false;
 }
 } // namespace
 
@@ -66,6 +95,40 @@ checkSolverSetup(const MooseObject & object,
         "time proportional to the square of the number of cluster sizes. The kernel adds its "
         "Jacobian entries directly, so use an SMP preconditioner with full = false:\n"
         "  [Preconditioning]\n    [smp]\n      type = SMP\n      full = false\n    []\n  []");
+
+  // MOOSE allocates local block storage for every pair of components in the nonlinear system as
+  // soon as two different variables are coupled (Assembly::init), so the memory grows with the
+  // square of the total number of components of ALL variables, not only of the coupled ones.
+  if (cm)
+  {
+    auto & nl = const_cast<FEProblemBase &>(problem).getNonlinearSystemBase(nl_sys_num);
+    const double n_components_total = nl.nVariables();
+    // The time tag is not yet registered when kernels are built, so assume at least two tags
+    const double n_tags = std::max<double>(problem.numMatrixTags(), 2);
+    const double bytes = block_families * n_tags * n_components_total * n_components_total *
+                         sizeof(libMesh::DenseMatrix<double>);
+    static std::mutex warned_mutex;
+    static std::set<const FEProblemBase *> warned;
+    if (bytes > cross_variable_warning_bytes && hasCrossVariableCoupling(*cm, nl))
+    {
+      bool first_time;
+      {
+        std::lock_guard<std::mutex> lock(warned_mutex);
+        first_time = warned.insert(&problem).second;
+      }
+      if (first_time)
+        object.mooseWarning(
+            "The preconditioner couples different array variables, and the nonlinear system has ",
+            static_cast<unsigned int>(n_components_total),
+            " array components in total. MOOSE then allocates local block storage for every pair "
+            "of components of the whole system, which needs about ",
+            bytes / 1.0e9,
+            " GB however few pairs are coupled and is paid before the first solve. Reduce the "
+            "number of components (coarser grouping, a smaller maximum cluster size), or drop the "
+            "coupling between the arrays at the cost of an approximate Jacobian for it: use "
+            "full = false and leave the off_diag_row/off_diag_column pair out.");
+    }
+  }
 }
 
 bool

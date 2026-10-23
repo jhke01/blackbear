@@ -160,6 +160,14 @@
     design = 'PointDefectRecombinationNodalKernel.md'
     requirement = 'BlackBear shall error when PointDefectRecombinationNodalKernel is coupled to its own variable, since its off-diagonal Jacobian term would then be dropped.'
   []
+  [defect_dynamics_cross_variable_memory_warning]
+    type = RunException
+    input = defect_dynamics_cross_variable_memory_warning.i
+    expect_err = "MOOSE then allocates local block storage for every pair of components of the whole system"
+    allow_warnings = false
+    design = 'PointDefectRecombinationNodalKernel.md'
+    requirement = 'BlackBear shall warn, before the first solve, when the preconditioner couples different array variables and the estimated local block storage of the whole nonlinear system exceeds 1 GB, giving the estimate and the options for reducing it.'
+  []
   [defect_dynamics_recovery_action]
     type = CSVDiff
     input = defect_dynamics_recovery_action.i
