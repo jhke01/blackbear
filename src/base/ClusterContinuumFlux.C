@@ -14,6 +14,8 @@
 
 #include "ClusterContinuumFlux.h"
 
+#include <array>
+
 namespace
 {
 /// Concentrations enter the fluxes as max(C, 0), as in the SUNDIALS Pokor benchmark
@@ -78,9 +80,11 @@ ClusterContinuumFlux::evaluate(const Real * state,
     f.add(n, -alpha * positiveDerivative(state[n]));
   }
 
-  // Slopes of the cell averages, limited so that no new extremum appears. The first and last
-  // cell keep a zero slope.
+  // Slopes of the cell averages, limited so that no new extremum appears, and their derivatives
+  // with respect to the cell averages of cells k - 1, k and k + 1. The first and last cell keep a
+  // zero slope.
   std::vector<Real> slope(nc, 0.0);
+  std::vector<std::array<Real, 3>> slope_partial(nc, std::array<Real, 3>{0.0, 0.0, 0.0});
   if (_use_limiter)
     for (unsigned int k = 1; k + 1 < nc; ++k)
     {
@@ -90,9 +94,30 @@ ClusterContinuumFlux::evaluate(const Real * state,
       const Real dx_left = _layout.cell(k).center - _layout.cell(k - 1).center;
       const Real dx_right = _layout.cell(k + 1).center - _layout.cell(k).center;
       const Real dx_center = _layout.cell(k + 1).center - _layout.cell(k - 1).center;
-      slope[k] = minmod(limiter_theta * (current - previous) / dx_left,
-                        (next - previous) / dx_center,
-                        limiter_theta * (next - current) / dx_right);
+
+      // The three one-sided estimates and their derivatives with respect to previous, current, next
+      const std::array<Real, 3> estimate = {limiter_theta * (current - previous) / dx_left,
+                                            (next - previous) / dx_center,
+                                            limiter_theta * (next - current) / dx_right};
+      const std::array<std::array<Real, 3>, 3> estimate_partial = {
+          std::array<Real, 3>{-limiter_theta / dx_left, limiter_theta / dx_left, 0.0},
+          std::array<Real, 3>{-1.0 / dx_center, 0.0, 1.0 / dx_center},
+          std::array<Real, 3>{0.0, -limiter_theta / dx_right, limiter_theta / dx_right}};
+
+      slope[k] = minmod(estimate[0], estimate[1], estimate[2]);
+      if (slope[k] != 0.0)
+      {
+        // minmod returns the estimate of smallest magnitude when all three agree in sign
+        unsigned int selected = 0;
+        for (unsigned int i = 1; i < 3; ++i)
+          if (std::fabs(estimate[i]) < std::fabs(estimate[selected]))
+            selected = i;
+        const Real chain[3] = {positiveDerivative(state[_layout.cell(k - 1).component]),
+                               positiveDerivative(state[_layout.cell(k).component]),
+                               positiveDerivative(state[_layout.cell(k + 1).component])};
+        for (unsigned int i = 0; i < 3; ++i)
+          slope_partial[k][i] = estimate_partial[selected][i] * chain[i];
+      }
     }
 
   // Flux across the face between cell f - 1 and cell f: the drift beta C_1 - alpha carries the
@@ -129,6 +154,23 @@ ClusterContinuumFlux::evaluate(const Real * state,
 
     Flux & f = flux[fluxIntoCell(face)];
     f.value = advective + diffusive;
+
+    // The upwind face value depends on the cell it comes from and on the slope of that cell, which
+    // depends on that cell and its two neighbors
+    {
+      const unsigned int upwind = from_left ? face - 1 : face;
+      const Real inner_derivative =
+          from_left ? positiveDerivative(left_inner) : positiveDerivative(right_inner);
+      const Real offset = x_face - (from_left ? left.center : right.center);
+      for (unsigned int i = 0; i < 3; ++i)
+      {
+        const int neighbor = static_cast<int>(upwind) - 1 + static_cast<int>(i);
+        if (neighbor >= 0 && neighbor < static_cast<int>(nc) && slope_partial[upwind][i] != 0.0)
+          f.add(_layout.cell(neighbor).component,
+                drift * inner_derivative * offset * slope_partial[upwind][i]);
+      }
+    }
+
     f.add(0,
           monomer_derivative *
               (coefficients.beta_face[face] * (from_left ? left_value : right_value) -

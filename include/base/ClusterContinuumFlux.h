@@ -127,9 +127,11 @@ public:
             std::vector<Real> & rate) const;
 
   /**
-   * Jacobian of -rate with respect to the state, with the limiter slopes held fixed. Exact when
-   * use_limiter is false. Entries of one row are consecutive and merged, and row 0 (the monomer)
-   * is dense.
+   * Jacobian of -rate with respect to the state. With use_limiter the derivative goes through the
+   * minmod slopes: the slope of a cell depends on its two neighbors, and wherever minmod selects
+   * one of its three arguments the derivative is that argument's, so the matrix is exact except
+   * at the points where the selection changes. Entries of one row are consecutive and merged, and
+   * row 0 (the monomer) is dense.
    */
   void jacobian(const Real * state,
                 const ClusterContinuumCoefficients & coefficients,
@@ -141,8 +143,11 @@ private:
   {
     Real value = 0.0;
     unsigned int count = 0;
-    unsigned int component[3] = {0, 0, 0};
-    Real partial[3] = {0.0, 0.0, 0.0};
+
+    /// The monomer, the two cells next to the face and the cells their limited slopes depend on
+    static constexpr unsigned int max_components = 5;
+    unsigned int component[max_components] = {};
+    Real partial[max_components] = {};
 
     void add(unsigned int c, Real d)
     {
