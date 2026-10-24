@@ -25,6 +25,13 @@
     design = 'ClusterContinuumMoment.md'
     requirement = 'BlackBear shall compute the number density, the point-defect content and the mean radius of a cluster size distribution that is discrete up to a switch size and a continuum above it, with a minimum cluster size that cuts a continuum cell at the lower edge of that size, so that a constant concentration per unit size gives the exact values.'
   []
+  [continuum_loop_observables]
+    type = CSVDiff
+    input = continuum_loop_observables.i
+    csvdiff = 'continuum_loop_observables_out.csv'
+    design = 'ClusterContinuumMoment.md'
+    requirement = 'BlackBear shall compute the dislocation line length and the lattice-parameter change of a loop family whose size distribution is discrete up to a switch size and a continuum above it, with a minimum cluster size, so that a constant concentration per unit size gives the exact values.'
+  []
   [continuum_distribution]
     type = CSVDiff
     input = continuum_distribution.i

@@ -13,7 +13,19 @@ continuum above it, the representation of [ContinuumLoopNodalKernel.md]. The
 - `content`, the density of point defects they hold, $\sum_n n C_n / V_{at}$, or
 - `average_radius`, the number-weighted mean radius $\sum_n r_n C_n / \sum_n C_n$ with
   $r_n = r_1 n^p$ ([!param](/Postprocessors/ClusterContinuumMoment/r1) and
-  [!param](/Postprocessors/ClusterContinuumMoment/radius_exponent)).
+  [!param](/Postprocessors/ClusterContinuumMoment/radius_exponent)),
+- `line_length`, the dislocation line length per volume of a loop family, $\sum_n 2\pi r_n C_n / V_{at}$
+  [m$^{-2}$] ([!cite](rest2006), Eq. 9, $\rho = \pi n_l d_l$ with $d_l$ the loop diameter), or
+- `lattice_strain`, the relative change of the lattice parameter caused by the loops,
+  $\frac{1}{3}\sum_n n C_n$ ([!cite](rest2006), Eq. 4, $\pi b n_l d_l^2 / 12$). For a loop of $n$ atoms,
+  $r_n^2 = n V_{at} / (\pi b)$, so $\pi b\, r_n^2 = n V_{at}$ and Rest's expression is one third of the
+  volume fraction of the atoms in loops.
+
+`line_length` and `lattice_strain` are defined for loops only
+([!param](/Postprocessors/ClusterContinuumMoment/radius_exponent) = 0.5), and the monomer is not a
+loop, so they are meant to be used with [!param](/Postprocessors/ClusterContinuumMoment/n_minimum) = 2.
+The lattice strain is the relative change of the lattice parameter of the crystal that contains the loops, from the loop population only; it ignores other
+sources of strain, and it assumes that each loop atom adds its atomic volume to the crystal.
 
 Only sizes of at least [!param](/Postprocessors/ClusterContinuumMoment/n_minimum) are counted.
 Choosing the size that corresponds to the smallest radius a microscope can resolve gives the

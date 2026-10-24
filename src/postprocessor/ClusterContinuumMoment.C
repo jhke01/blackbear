@@ -38,12 +38,15 @@ ClusterContinuumMoment::validParams()
       "Computes the number density, the point-defect content or the mean radius of a cluster size "
       "distribution that is discrete up to switch_size and a Fokker-Planck continuum above it.");
   params.addRequiredCoupledVar("clusters", "Cluster array concentration variable.");
-  MooseEnum quantity("density content average_radius");
+  MooseEnum quantity("density content average_radius line_length lattice_strain");
   params.addRequiredParam<MooseEnum>(
       "quantity",
       quantity,
       "density: sum of C_n over V_at [1/m^3]; content: sum of n C_n over V_at [1/m^3]; "
-      "average_radius: number-weighted mean radius [m] (r_n = r1 n^radius_exponent).");
+      "average_radius: number-weighted mean radius [m] (r_n = r1 n^radius_exponent). "
+      "line_length: sum of 2 pi r_n C_n over V_at [m^-2], the dislocation line length of a loop "
+      "family. lattice_strain: relative change of the lattice parameter due to the loops, "
+      "V_at*sum(n C_n)/3 (Rest 2006, Eq 4). The last two need radius_exponent = 1/2 (loops).");
   params.addRequiredParam<unsigned int>("num_cluster_sizes",
                                         "Largest cluster size represented, N.");
   params.addRequiredParam<unsigned int>(
@@ -85,6 +88,10 @@ ClusterContinuumMoment::ClusterContinuumMoment(const InputParameters & parameter
     paramError("atomic_volume", "must be positive.");
   if (_r1 <= 0.0 || _radius_exponent <= 0.0)
     mooseError(type(), " requires r1 > 0 and radius_exponent > 0.");
+  if ((_quantity == Quantity::LINE_LENGTH || _quantity == Quantity::LATTICE_STRAIN) &&
+      std::abs(_radius_exponent - 0.5) > 1e-12)
+    paramError("quantity",
+               "line_length and lattice_strain are defined for loops only (radius_exponent = 0.5).");
   if (getArrayVar("clusters", 0)->count() != _layout.componentCount())
     paramError("clusters",
                "The continuum layout requires ",
@@ -162,6 +169,10 @@ ClusterContinuumMoment::getValue() const
       return _count > 0.0 ? _content / (_count * _atomic_volume) : 0.0;
     case Quantity::AVERAGE_RADIUS:
       return _number > 0.0 ? _radius_weighted / _number : 0.0;
+    case Quantity::LINE_LENGTH:
+      return _count > 0.0 ? 2.0 * libMesh::pi * _radius_weighted / (_count * _atomic_volume) : 0.0;
+    case Quantity::LATTICE_STRAIN:
+      return _count > 0.0 ? _content / (3.0 * _count) : 0.0;
   }
   return 0.0;
 }

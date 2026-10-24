@@ -26,6 +26,13 @@
  * A continuum cell holds a concentration per unit size, so its moment is the integral over the
  * part of the cell above n_minimum - 1/2 (the lower edge of size n_minimum), as in the SUNDIALS
  * Pokor benchmark. The monomer is size 1.
+ *
+ * For a loop family (radius_exponent 1/2, r_n^2 = n V_at/(pi b)) two more quantities follow from the
+ * same sums: the dislocation line length per volume, sum 2 pi r_n C_n / V_at [m^-2] (Rest, J. Nucl.
+ * Mater. 349 (2006) 150, Eq 9, rho = pi n_l d_l with d_l the diameter), and the relative change of the
+ * lattice parameter (Rest Eq 4, pi b n_l d_l^2/12), which for these loops equals one third of the
+ * relative volume of the atoms in the loops, sum n C_n / 3 (C_n a site fraction). The monomer is not a
+ * loop, so use n_minimum = 2 for these two.
  */
 class ClusterContinuumMoment : public NodalPostprocessor
 {
@@ -44,7 +51,9 @@ protected:
   {
     DENSITY,
     CONTENT,
-    AVERAGE_RADIUS
+    AVERAGE_RADIUS,
+    LINE_LENGTH,
+    LATTICE_STRAIN
   };
 
   const ArrayVariableValue & _clusters;
