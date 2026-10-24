@@ -33,6 +33,16 @@ at the two ends of the step. It cannot become negative. The accuracy is the accu
 time step has to follow the change of $c_i$ and of $\rho_N$ (`timestep_relative_change` of the
 [DefectDynamics](syntax/DefectDynamics/index.md) block includes the density).
 
+With [!param](/Postprocessors/CellularNetworkDislocationDensity/line_length_postprocessor) the source is not the steady-state loop density but the line
+length $L$ of the loops that join the network, and
+
+\begin{equation}
+\frac{d\rho_N}{dt} = k\,L - k\,\rho_N - \frac{4 v_l}{d_g}\rho_N, \qquad k = v_l \frac{\sqrt{f/\pi}}{C_A C_\rho}\sqrt{\rho_N},
+\end{equation}
+
+where $k\rho_N$ is Rest's self-annihilation term, so this is the same Riccati equation with the source $(C v_l / 2) L$ in the variable $\sqrt{\rho_N}$. [LoopNetworkTransferNodalKernel.md] removes the loops
+from the cluster distribution at the same rate $k$.
+
 The steady-state loop density is a good approximation late in the irradiation but not early: in the
 SUNDIALS reference with the loop density as its own equation (Rest's Eq. 15), the network density at 0.1 dpa is about 25 percent lower than with
 the steady state, and the two agree to 4 percent at 10 dpa.

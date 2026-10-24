@@ -29,6 +29,15 @@
  * rho_N positive; the accuracy is that of holding c_i constant, which is controlled by the time step
  * (RelativeChangeTimestepLimit on this postprocessor).
  *
+ * With line_length_postprocessor the source is not the loop density of the steady state but the line
+ * length L of the loops that join the network (LoopNetworkTransferNodalKernel removes them from the
+ * cluster distribution at the rate k = v_l C sqrt(rho)):
+ *
+ *   d(rho)/dt = k (L - rho) - 4 v_l rho/d_g,   du/dt = (C v_l/2) L - (2 v_l/d_g) u - (C v_l/2) u^2,
+ *
+ * the same Riccati form with the source (C v_l/2) L, solved with L at the mean of the two ends of the
+ * step. The line length of the network and of the loops together is then conserved.
+ *
  * The value is the density at the end of the last completed step. Kernels that read it
  * (DislocationRecoveryNodalKernel with dislocation_density_postprocessor) see it as a constant
  * within a step.
@@ -54,10 +63,12 @@ public:
                       Real z_iv,
                       Real ca_crho,
                       Real poisson_ratio,
-                      Real grain_size);
+                      Real grain_size,
+                      Real line_length = -1.0);
 
 protected:
   const PostprocessorValue & _c_i;
+  const PostprocessorValue * const _line_length;
   const Real _D0;
   const Real _Em_eV;
   const Real _temperature;
@@ -73,4 +84,5 @@ protected:
   /// State: the density and the interstitial site fraction at the end of the last step
   Real & _rho;
   Real & _c_i_old;
+  Real & _line_length_old;
 };

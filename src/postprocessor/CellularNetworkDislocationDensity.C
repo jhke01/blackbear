@@ -53,6 +53,13 @@ CellularNetworkDislocationDensity::validParams()
                         0.0,
                         "Grain size d_g [m] of the grain-boundary loss term 4 v_l rho/d_g. "
                         "0 turns the term off.");
+  params.addParam<PostprocessorName>(
+      "line_length_postprocessor",
+      "Line length per volume [m^-2] of the loops that join the network (for example "
+      "ClusterContinuumMoment with quantity = line_length). When given, the network gains this line "
+      "length at the rate k = v_l sqrt(f/pi) sqrt(rho) / (C_A C_rho) instead of the steady-state "
+      "loop source of Rest's Eq 18; pair it with LoopNetworkTransferNodalKernel, which removes the "
+      "loops at the same rate.");
   params.set<ExecFlagEnum>("execute_on") = {EXEC_INITIAL, EXEC_TIMESTEP_END};
   return params;
 }
@@ -61,6 +68,9 @@ CellularNetworkDislocationDensity::CellularNetworkDislocationDensity(
     const InputParameters & parameters)
   : GeneralPostprocessor(parameters),
     _c_i(getPostprocessorValue("interstitial_concentration")),
+    _line_length(isParamValid("line_length_postprocessor")
+                     ? &getPostprocessorValue("line_length_postprocessor")
+                     : nullptr),
     _D0(getParam<Real>("D0")),
     _Em_eV(getParam<Real>("Em_eV")),
     _temperature(getParam<Real>("temperature")),
@@ -73,7 +83,8 @@ CellularNetworkDislocationDensity::CellularNetworkDislocationDensity(
     _grain_size(getParam<Real>("grain_size")),
     _diffusivity(_D0 * std::exp(-_Em_eV / (network_kB_eV * _temperature))),
     _rho(declareRestartableData<Real>("network_density", _rho0)),
-    _c_i_old(declareRestartableData<Real>("interstitial_concentration_old", 0.0))
+    _c_i_old(declareRestartableData<Real>("interstitial_concentration_old", 0.0)),
+    _line_length_old(declareRestartableData<Real>("line_length_old", 0.0))
 {
   if (_D0 <= 0.0 || _temperature <= 0.0 || _burgers_vector <= 0.0 || _atomic_volume <= 0.0)
     mooseError(type(), " requires positive D0, temperature, burgers_vector and atomic_volume.");
@@ -99,7 +110,8 @@ CellularNetworkDislocationDensity::advance(Real rho0,
                                            Real z_iv,
                                            Real ca_crho,
                                            Real poisson_ratio,
-                                           Real grain_size)
+                                           Real grain_size,
+                                           Real line_length)
 {
   if (c_i <= 0.0 || dt <= 0.0)
     return rho0;
@@ -116,7 +128,8 @@ CellularNetworkDislocationDensity::advance(Real rho0,
   const Real C = std::sqrt(f / pi) / ca_crho;
   const Real a = 0.5 * C * v;                                     // coefficient of u^2
   const Real b = grain_size > 0.0 ? 2.0 * v / grain_size : 0.0;   // coefficient of u
-  const Real c = 0.5 * pi * v * k;                                // source
+  // source: Rest's loop source, or the line length of the loops that join the network
+  const Real c = line_length >= 0.0 ? 0.5 * C * v * line_length : 0.5 * pi * v * k;
   // du/dt = c - b u - a u^2 = -a (u - u_plus)(u - u_minus)
   const Real disc = std::sqrt(b * b + 4.0 * a * c);
   const Real u_plus = (-b + disc) / (2.0 * a);
@@ -132,14 +145,18 @@ CellularNetworkDislocationDensity::advance(Real rho0,
 void
 CellularNetworkDislocationDensity::execute()
 {
+  const Real line_length = _line_length ? *_line_length : -1.0;
   if (_t_step == 0)
   {
     _rho = _rho0;
     _c_i_old = _c_i;
+    _line_length_old = line_length;
     return;
   }
   const Real c_mean = 0.5 * (_c_i_old + _c_i);
+  const Real l_mean = _line_length ? 0.5 * (_line_length_old + line_length) : -1.0;
   _rho = advance(_rho, _dt, c_mean, _diffusivity, _burgers_vector, _atomic_volume, _z_iv,
-                 _ca_crho, _poisson_ratio, _grain_size);
+                 _ca_crho, _poisson_ratio, _grain_size, l_mean);
   _c_i_old = _c_i;
+  _line_length_old = line_length;
 }
