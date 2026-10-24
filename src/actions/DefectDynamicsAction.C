@@ -872,9 +872,15 @@ DefectDynamicsAction::actAddNodalKernels()
       params.set<Real>("Em_eV") = sp->getParam<Real>("Em");
       params.set<Real>("temperature") = temperature;
       params.set<Real>("Z") = sp->getParam<Real>("Z");
-      params.set<Real>("rho0") = recovery_action->getParam<Real>("rho0");
-      params.set<Real>("K") = recovery_action->getParam<Real>("K");
       params.set<Real>("burgers_vector") = recovery_action->getParam<Real>("burgers_vector");
+      if (recovery_action->cellularNetwork())
+        params.set<PostprocessorName>("dislocation_density_postprocessor") =
+            name() + "_network_density";
+      else
+      {
+        params.set<Real>("rho0") = recovery_action->getParam<Real>("rho0");
+        params.set<Real>("K") = recovery_action->getParam<Real>("K");
+      }
       _problem->addNodalKernel(
           "DislocationRecoveryNodalKernel", sp->name() + "_recovery", params);
     }
@@ -933,9 +939,56 @@ DefectDynamicsAction::actAddPostprocessors()
   const Real atomic_volume = getParam<Real>("atomic_volume");
   const Real lattice_parameter = getParam<Real>("lattice_parameter");
 
+  const auto recovery_action = recovery();
+  const bool cellular = recovery_action && recovery_action->cellularNetwork();
+  if (cellular)
+  {
+    // Rest (2006): the network density is driven by the interstitial loop species' monomers
+    const DefectSpeciesAction * loops = nullptr;
+    if (recovery_action->isParamValid("interstitial_species"))
+    {
+      const auto wanted = recovery_action->getParam<std::string>("interstitial_species");
+      for (const auto * sp : species())
+        if (sp->name() == wanted)
+          loops = sp;
+      if (!loops)
+        mooseError("[Recovery] interstitial_species '", wanted, "' is not a species sub-block.");
+    }
+    else
+      for (const auto * sp : species())
+        if (sp->getParam<MooseEnum>("geometry") == "loop")
+        {
+          if (loops)
+            mooseError("[Recovery] model = cellular_network found two species with geometry = "
+                       "loop; name the interstitial one with interstitial_species.");
+          loops = sp;
+        }
+    if (!loops)
+      mooseError("[Recovery] model = cellular_network needs a species with geometry = loop, whose "
+                 "monomer concentration drives the network.");
+    if (loops->getParam<MooseEnum>("geometry") != "loop")
+      mooseError("[Recovery] interstitial_species must have geometry = loop.");
+    InputParameters params = _factory.getValidParams("CellularNetworkDislocationDensity");
+    params.set<PostprocessorName>("interstitial_concentration") =
+        loops->name() + "_monomer_concentration";
+    params.set<Real>("D0") = loops->getParam<Real>("D0");
+    params.set<Real>("Em_eV") = loops->getParam<Real>("Em");
+    params.set<Real>("temperature") = getParam<Real>("temperature");
+    params.set<Real>("burgers_vector") = recovery_action->getParam<Real>("burgers_vector");
+    params.set<Real>("atomic_volume") = atomic_volume;
+    params.set<Real>("rho0") = recovery_action->getParam<Real>("rho0");
+    params.set<Real>("bias") = recovery_action->getParam<Real>("bias");
+    params.set<Real>("ca_crho") = recovery_action->getParam<Real>("ca_crho");
+    params.set<Real>("poisson_ratio") = recovery_action->getParam<Real>("poisson_ratio");
+    params.set<Real>("grain_size") = recovery_action->getParam<Real>("grain_size");
+    _problem->addPostprocessor("CellularNetworkDislocationDensity", name() + "_network_density", params);
+  }
+
   if (getParam<Real>("timestep_relative_change") > 0.0)
   {
     std::vector<PostprocessorName> monitored;
+    if (cellular)
+      monitored.push_back(name() + "_network_density");
     for (const auto * sp : species())
       if (sp->getParam<Real>("resolvable_radius") > 0.0)
         monitored.push_back(sp->name() + "_resolvable_density");

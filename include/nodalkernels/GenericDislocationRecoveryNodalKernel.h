@@ -29,6 +29,10 @@
  * the SAME rho0/K/b, matching the single, un-subscripted dislocation density Pokor's own Eqs
  * 3e/7/8 use for both species' sink terms.
  *
+ * With dislocation_density_postprocessor the density is instead read from a postprocessor, for
+ * models in which it evolves with the point-defect concentrations (CellularNetworkDislocationDensity).
+ * The density is then a lagged constant within each step and the Jacobian is unchanged.
+ *
  * Unlike PointDefectRecombinationNodalKernel (which must couple to the OTHER species' array and
  * is therefore non-AD only), this kernel has no coupled variable at all, so it is AD-safe and
  * templated on is_ad like the core kernels.
@@ -55,6 +59,9 @@ protected:
   const Real _inv_sqrt_rho0;
   const Real _K;
   const Real _burgers_vector;
+  /// If not null, the dislocation density is this postprocessor's value (advanced by the problem at
+  /// the end of each step, so it is constant within a step) instead of the closed form of Eq 8
+  const PostprocessorValue * const _rho_postprocessor;
 
   usingGenericArrayNodalKernelMembers;
 };

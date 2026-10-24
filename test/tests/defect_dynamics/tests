@@ -175,6 +175,37 @@
     design = 'DefectDynamicsAction.md DefectRecoveryAction.md'
     requirement = 'BlackBear shall build a two-species grouped cluster-dynamics problem from a [DefectDynamics] block whose [Recovery] sub-block replaces each species constant dislocation sink with a time-evolving one, deriving every DislocationRecoveryNodalKernel instance from the shared rho0/K/burgers_vector and each species own D0/Em/Z.'
   []
+  [defect_dynamics_cellular_network_action]
+    type = CSVDiff
+    input = defect_dynamics_cellular_network_action.i
+    csvdiff = 'defect_dynamics_cellular_network_action_out.csv'
+    design = 'DefectRecoveryAction.md CellularNetworkDislocationDensity.md'
+    requirement = 'BlackBear shall advance the cellular network dislocation density of Rest (2006) from the interstitial monomer concentration of the loop species when [Recovery] sets model = cellular_network, and use it in the dislocation sink of every species.'
+  []
+  [defect_dynamics_cellular_network_bias_error]
+    type = RunException
+    input = defect_dynamics_cellular_network_action.i
+    cli_args = "DefectDynamics/Recovery/bias=-1"
+    expect_err = "must be positive"
+    design = 'DefectRecoveryAction.md'
+    requirement = 'BlackBear shall error when [Recovery] sets model = cellular_network with a bias that is not positive.'
+  []
+  [defect_dynamics_cellular_network_K_error]
+    type = RunException
+    input = defect_dynamics_cellular_network_action.i
+    cli_args = "DefectDynamics/Recovery/K=1e7"
+    expect_err = "is not used with model = cellular_network"
+    design = 'DefectRecoveryAction.md'
+    requirement = 'BlackBear shall error when [Recovery] sets K together with model = cellular_network.'
+  []
+  [defect_dynamics_cellular_network_two_loops_error]
+    type = RunException
+    input = defect_dynamics_cellular_network_action.i
+    cli_args = "DefectDynamics/Recovery/interstitial_species=vacancy"
+    expect_err = "interstitial_species must have geometry = loop"
+    design = 'DefectRecoveryAction.md'
+    requirement = 'BlackBear shall error when the interstitial species of a cellular network model is ambiguous.'
+  []
   [defect_dynamics_recovery_dislocation_density_warning]
     type = RunApp
     input = defect_dynamics_recovery_action.i

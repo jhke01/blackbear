@@ -182,6 +182,24 @@ silently being ignored. `[Recovery]`'s own `burgers_vector` is a property of the
 network itself, distinct from any loop species' own geometric
 [!param](/DefectDynamics/DefectSpeciesAction/burgers_vector).
 
+With `model = cellular_network` in `[Recovery]` the density is instead that of [!cite](rest2006), advanced from the
+interstitial monomer concentration (see [DefectRecoveryAction.md]):
+
+```
+[Recovery]
+  model = cellular_network
+  rho0 = 1e13
+  bias = 0.1                       # Z_iv, relative interstitial/vacancy bias (not known for steel)
+  grain_size = 4e-5
+  interstitial_species = interstitial
+  burgers_vector = 2.08e-10
+[]
+```
+
+The density is advanced explicitly at the end of each step with the interstitial concentration at the two ends of the step, so
+the step must be small compared to the time over which the interstitial concentration and the density change.
+`timestep_relative_change` then also limits the relative change of the density.
+
 ## Cascade Spectrum
 
 By default, each species' entire generation rate goes to the monomer row. A species turns on

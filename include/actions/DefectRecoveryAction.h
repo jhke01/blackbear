@@ -23,9 +23,14 @@
  * un-subscripted dislocation density for both species' sink terms). Optional -- zero or one
  * instance; when absent, every species keeps its existing constant dislocation sink.
  *
- * Holds no logic of its own; it exists only so DefectDynamicsAction can look it up
- * (ActionWarehouse::getActions<DefectRecoveryAction>()) and read its validated parameters while
- * building the DislocationRecoveryNodalKernel instances.
+ * With model = cellular_network the density is instead the cellular network dislocation density of
+ * Rest (2006), advanced by a CellularNetworkDislocationDensity postprocessor that
+ * DefectDynamicsAction builds from the interstitial loop species' monomer concentration; K is then
+ * not used.
+ *
+ * Holds no logic of its own beyond validating its parameters; it exists so DefectDynamicsAction can
+ * look it up (ActionWarehouse::getActions<DefectRecoveryAction>()) and read them while building the
+ * DislocationRecoveryNodalKernel instances.
  */
 class DefectRecoveryAction : public Action
 {
@@ -35,4 +40,7 @@ public:
   DefectRecoveryAction(const InputParameters & params);
 
   virtual void act() override {}
+
+  /// True when the density is the cellular network model of Rest (2006)
+  bool cellularNetwork() const;
 };

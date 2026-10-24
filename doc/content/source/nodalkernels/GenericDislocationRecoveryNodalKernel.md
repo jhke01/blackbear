@@ -71,3 +71,10 @@ parameter in self-consistent SI units, not a literal copy of the paper's quoted 
 - [GenericVacancyVoidGroupedNodalKernel.md]
 - [GenericInterstitialLoopGroupedNodalKernel.md]
 - [PointDefectRecombinationNodalKernel.md]
+
+## Density from a postprocessor
+
+With [!param](/NodalKernels/DislocationRecoveryNodalKernel/dislocation_density_postprocessor) the density $\rho$ is the
+value of that postprocessor (negative values count as zero) and the closed form above is not used; `rho0` and `K` must then not be
+given. A postprocessor is advanced after each step, so $\rho$ is constant within a step and the Jacobian is unchanged.
+[CellularNetworkDislocationDensity.md] is the postprocessor used by `[Recovery]` with `model = cellular_network`.
