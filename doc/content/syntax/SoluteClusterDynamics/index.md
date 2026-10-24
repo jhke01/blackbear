@@ -130,6 +130,16 @@ percent in the radius, for 3095 steps; the continuum is about 6.5 times faster (
 default `IterationAdaptiveDT` alone, both are off by a factor of 3 in the density at 0.01 s and by 18 percent at
 1 s, because the steps are too large for the early rise of the cluster density.
 
+## Time Step for the Onset of the Resolvable Population
+
+With a `resolvable_radius`, the resolvable density rises by many orders of magnitude in a short interval, and a time step that is only capped in proportion to
+the time cannot follow it (see [DefectDynamics/index.md]). Setting
+[!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/timestep_relative_change) adds the postprocessor
+`<block name>_timestep_limit` ([RelativeChangeTimestepLimit.md]), which limits the relative change of the resolvable density to that fraction per step,
+bounded above by [!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/timestep_cap_fraction) $\times\, t\,+$
+[!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/timestep_cap_minimum). The time stepper then names it as its
+`timestep_limiting_postprocessor`. It needs `resolvable_radius`.
+
 ## Example Input Syntax
 
 In this example, no `[DefectDynamics]` block is present, so a solute-only study is built with the

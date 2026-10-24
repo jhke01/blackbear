@@ -185,6 +185,24 @@ SoluteClusterDynamicsAction::validParams()
       "corresponds to cluster size n = 1.");
 
   params.addParam<Real>(
+      "timestep_relative_change",
+      0.0,
+      "If positive, adds a postprocessor '<block name>_timestep_limit' (RelativeChangeTimestepLimit) "
+      "that limits the relative change of the resolvable density to this fraction per step (0.1 is "
+      "a good start), bounded above by timestep_cap_fraction * t + timestep_cap_minimum. Name it as "
+      "the timestep_limiting_postprocessor of the time stepper. Requires resolvable_radius.");
+  params.addParam<Real>("timestep_cap_fraction",
+                        0.01,
+                        "Upper limit of the step in proportion to the time, used with "
+                        "timestep_relative_change.");
+  params.addParam<Real>("timestep_cap_minimum",
+                        0.5,
+                        "Upper limit of the step at the start [s], used with "
+                        "timestep_relative_change.");
+  params.addParam<Real>("timestep_value_floor",
+                        1.0,
+                        "A resolvable density below this value [1/m^3] is measured against it.");
+  params.addParam<Real>(
       "resolvable_radius",
       0.0,
       "If positive, adds a number-density and average-radius postprocessor pair "
@@ -566,6 +584,20 @@ SoluteClusterDynamicsAction::addContinuumPostprocessors()
 void
 SoluteClusterDynamicsAction::actAddPostprocessors()
 {
+  if (getParam<Real>("timestep_relative_change") > 0.0)
+  {
+    if (getParam<Real>("resolvable_radius") <= 0.0)
+      paramError("timestep_relative_change",
+                 "needs resolvable_radius, whose resolvable density it limits.");
+    InputParameters params = _factory.getValidParams("RelativeChangeTimestepLimit");
+    params.set<std::vector<PostprocessorName>>("postprocessors") = {name() + "_resolvable_density"};
+    params.set<Real>("relative_change_target") = getParam<Real>("timestep_relative_change");
+    params.set<Real>("value_floor") = getParam<Real>("timestep_value_floor");
+    params.set<Real>("time_fraction") = getParam<Real>("timestep_cap_fraction");
+    params.set<Real>("minimum_cap") = getParam<Real>("timestep_cap_minimum");
+    _problem->addPostprocessor("RelativeChangeTimestepLimit", name() + "_timestep_limit", params);
+  }
+
   const std::string var_name = variableName();
   const unsigned int num_cluster_sizes = getParam<unsigned int>("num_cluster_sizes");
 

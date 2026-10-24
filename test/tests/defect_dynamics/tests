@@ -453,6 +453,21 @@
     design = 'DefectDynamicsAction.md'
     requirement = 'BlackBear shall warn when the switch_size of a [DefectDynamics] block with tail = fokker_planck is below the size at which a species with resolvable_radius becomes resolvable, since the cut of its resolvable population then falls inside a continuum cell.'
   []
+  [defect_dynamics_timestep_limit_action]
+    type = CSVDiff
+    input = defect_dynamics_timestep_limit_action.i
+    csvdiff = 'defect_dynamics_timestep_limit_action_out.csv'
+    design = 'DefectDynamicsAction.md RelativeChangeTimestepLimit.md'
+    requirement = 'BlackBear shall add, with timestep_relative_change, a postprocessor that limits the relative change of the resolvable densities of a [DefectDynamics] block to a given fraction per step and bounds the step in proportion to the time, for use as the timestep_limiting_postprocessor of the time stepper.'
+  []
+  [defect_dynamics_timestep_limit_no_resolvable_error]
+    type = RunException
+    input = defect_dynamics_timestep_limit_action.i
+    cli_args = "DefectDynamics/vacancy/resolvable_radius=0 DefectDynamics/interstitial/resolvable_radius=0"
+    expect_err = "needs resolvable_radius on at least one species"
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall error when timestep_relative_change is set for a [DefectDynamics] block in which no species has a resolvable_radius, since there is no resolvable density to limit.'
+  []
   [defect_dynamics_fokker_planck_binding_table_error]
     type = RunException
     input = defect_dynamics_fokker_planck_action.i
