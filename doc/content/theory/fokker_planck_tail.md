@@ -43,8 +43,9 @@ reference were checked to be those of BlackBear, but it is a grouped solution it
 - With the time step of the production inputs (`IterationAdaptiveDT` with a cap proportional to the time), **both** schemes are wrong
   in the resolvable densities during their steep rise, by factors of 2 to $10^5$ (rows where the reference density exceeds $10^{12}$ m$^{-3}$).
   An earlier result that Fokker-Planck was clearly more accurate came from this cap and is withdrawn.
-- With the step also limited by the relative change of the resolvable densities (0.1 per step; recipe in the
-  [DefectDynamics](syntax/DefectDynamics/index.md) page), the two are equally accurate. The median over the six cases of the worst deviation is
+- With the step also limited by the relative change of the resolvable densities (0.1 per step; `timestep_relative_change` of the
+  [DefectDynamics](syntax/DefectDynamics/index.md) and [SoluteClusterDynamics](syntax/SoluteClusterDynamics/index.md) blocks, which add
+  [RelativeChangeTimestepLimit.md]), the two are equally accurate. The median over the six cases of the worst deviation is
   12.1 percent (grouping) and 12.2 percent (Fokker-Planck, `switch_size = 160`) in the void density, 3.7 and 3.7 in the loop density,
   0.0 and 0.1 in the void radius, and 0.1 and 1.2 in the loop radius. The remaining void-density difference of about 11 percent is shared by both
   and lies in the steep onset; it was not traced to the reference or to the time discretization.
@@ -77,7 +78,8 @@ estimate $10 \times 2 \times (\text{unknowns})^2 \times 80$ B of the pair storag
 - Convergence in the cell ratio and in the switch size beyond the values tried (switch 50 to 400, ratio 1.02 to 1.08, mostly at one case).
 - Binding-energy tables, helium and multiple solutes with the continuum (the tables are rejected by the actions).
 - Other temperatures and parameter sets than those above; other machines; threading and MPI.
-- An adaptive time-step rule built into the action; the recipe must be written in the input.
+- The time stepper itself: the actions add the limit (`<block name>_timestep_limit`), but the input must name it as the
+  `timestep_limiting_postprocessor`, and the default of 0.1 per step was chosen on the cases above.
 - The origin of the 11 percent void-density difference that both schemes share.
 
 ## See Also
