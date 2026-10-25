@@ -30,6 +30,14 @@ say how loops of the many sizes of a cluster-dynamics distribution join the netw
 above a minimum size is an assumption made here. Loops are moved to the network at a rate that does not depend on their own size or on
 the distance of that particular loop to a wall.
 
+!alert warning title=Experimental
+In the SUNDIALS reference of this model (SA304 parameters, $Z_{iv} = 0.1$, $C_A C_\rho = 2$, 10 dpa) the network density
+reaches the same value of about $1.4 \times 10^{15}$ m$^{-2}$ from initial densities of $10^{10}$ and $10^{15}$ m$^{-2}$ at 603 K, but at 673 K it does not:
+it ends at $5.5 \times 10^{9}$ m$^{-2}$ from $10^{10}$ and at $6 \times 10^{13}$ m$^{-2}$ from $10^{15}$. At 673 K with $Z_{iv} = 0.1$ there is a critical starting density between
+$3 \times 10^{11}$ and $6 \times 10^{11}$ m$^{-2}$: lower starts fall, higher starts reach a plateau of $6 \times 10^{13}$ m$^{-2}$. At 573 and 623 K the two starts tried
+($10^{10}$ and $10^{15}$) end within a factor of 1.5. Other values of $Z_{iv}$ and other temperatures have not been mapped. The results depend on the transfer rate, which is an assumption of this implementation.
+Do not treat the density it gives as a prediction.
+
 The kernel is added by `[Recovery]` with `loop_transfer = true` (see [DefectRecoveryAction.md]); it needs `tail = fokker_planck`.
 
 ## Example Input Syntax
