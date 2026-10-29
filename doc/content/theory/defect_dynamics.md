@@ -331,36 +331,19 @@ of the step. It cannot become negative. Because the density is read by the sink 
 changing [!param](/DefectDynamics/DefectDynamicsAction/timestep_relative_change) from 0.1 to 0.03 and 0.01 did not change the result by more than 0.01 percent in the density, so
 the default is enough there; this was not tested where $c_i$ changes much faster.
 
-### Loop transfer (experimental)
-
-In the steady-state form, the loops that feed the network are the ones of Rest's separate loop equation, and the loops of the cluster-size distribution do not lose any line length when the network gains it.
-In the cluster dynamics the loops keep growing, so the same line length is counted twice. With [!param](/DefectDynamics/Recovery/DefectRecoveryAction/loop_transfer) the loops of the cluster
-distribution themselves join the network, at the rate at which a loop climbing at $v_l$ covers the distance $L = C_A C_\rho \sqrt{\pi/(\rho f(\nu))}$ between cell walls:
-
-!equation
-k = \frac{v_l}{L} = v_l \frac{\sqrt{f(\nu)/\pi}}{C_A C_\rho}\sqrt{\rho}, \qquad
-\frac{d\rho}{dt} = k\,(L_{\mathrm{loops}} - \rho) - \frac{4 v_l}{d_g}\rho,
-
-where $L_{\mathrm{loops}} = \sum_n 2\pi r_n C_n / V_{at}$ is the line length of the loops that join, and $k\rho$ is the self-annihilation term above.
-[LoopNetworkTransferNodalKernel.md] removes every loop of at least [!param](/DefectDynamics/Recovery/DefectRecoveryAction/transfer_minimum_size) from the distribution at the rate $k$, the same for every size.
-
-!alert warning title=The transfer rate is an assumption
-[!cite](rest2006) has one loop population whose diameter is tied to the cell size and does not say how loops of many sizes join the network. A rate that is the same for every loop above a
-minimum size is a choice of this implementation. In the SUNDIALS reference implementation of the same equations the result depends on it, and at 673 K it depends on the starting density (see below).
-
 ### What has been checked, and what has not
 
 All numbers are from one set of parameters (SA304 steel in the OSIRIS reactor, Pokor et al. Table 5 and 6), one machine, with $Z_{iv}$ and $C_A C_\rho$ assumed.
 
 - The exact step agrees with an ODE integration at a relative tolerance of $10^{-12}$ to better than $3 \times 10^{-14}$.
 - Against the same equations in the SUNDIALS Pokor benchmark with matched physics (no grain-boundary sink in the monomer balance, the 2/1 dimer bookkeeping), the density and the cluster
-  observables agree within 0.2 percent (steady-state source) and within 0.5 and 0.6 percent (loop transfer) over 0.01 to 10 dpa at 603 K. This checks the implementation of the equations, not their physics.
-- At 603 K and 10 dpa, from an initial density of $10^{10}$ m$^{-2}$ with $Z_{iv} = 0.1$ and $C_A C_\rho = 2$, the density is $1.4 \times 10^{14}$ m$^{-2}$ (steady-state source) and
-  $1.4 \times 10^{15}$ m$^{-2}$ (loop transfer). Pokor's law gives $2 \times 10^{9}$ m$^{-2}$. The model changes the sign of the trend as well as the size.
+  observables agree within 0.2 percent over 0.01 to 10 dpa at 603 K. This checks the implementation of the equations, not their physics.
+- At 603 K and 10 dpa, from an initial density of $10^{10}$ m$^{-2}$ with $Z_{iv} = 0.1$ and $C_A C_\rho = 2$, the density is $1.4 \times 10^{14}$ m$^{-2}$.
+  Pokor's law gives $2 \times 10^{9}$ m$^{-2}$. The model changes the sign of the trend as well as the size.
 - The values of $Z_{iv}$ (0.1 and 0.01 were used; [!cite](rest2006) gives $5 \times 10^{-4}$ for UO$_2$) and of $C_A C_\rho$ (2 and 3) are not known for steel. Results change by a factor of 10 or
-  more between $Z_{iv} = 0.1$ and 0.01, and by 17 percent in the loop-transfer density at 10 dpa between $C_A C_\rho = 2$ and 3.
-- With loop transfer at 573 K and 623 K, initial densities of $10^{10}$ and $10^{15}$ m$^{-2}$ end within a factor of 1.6 of each other at 3 dpa (1.53 at 573 K, 1.07 at 623 K). At 673 K ($Z_{iv} = 0.1$) there is a critical initial
-  density between $3 \times 10^{11}$ and $6 \times 10^{11}$ m$^{-2}$: below it the density falls, above it every start reaches $6 \times 10^{13}$ m$^{-2}$. The cause was not established.
+  more between $Z_{iv} = 0.1$ and 0.01, and by a factor of 1.6 in the density at 10 dpa between $C_A C_\rho = 2$ and 3 (from an initial density of $10^{15}$ m$^{-2}$ at 603 K: $2.1 \times 10^{14}$ and $3.3 \times 10^{14}$ m$^{-2}$).
+- At 673 K ($Z_{iv} = 0.1$) initial densities of $10^{10}$ and $10^{15}$ m$^{-2}$ both end at $3.6 \times 10^{14}$ and $3.7 \times 10^{14}$ m$^{-2}$ at 10 dpa.
+  At 603 K the same two starts end at $1.4 \times 10^{14}$ and $2.1 \times 10^{14}$ m$^{-2}$ at 10 dpa, so they have not converged there. The model has not been run at 573 K or 623 K.
 - No dislocation-density data of a steel were compared with the model.
 
 ### Line length and lattice strain from the loop population

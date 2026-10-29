@@ -206,28 +206,6 @@
     design = 'DefectRecoveryAction.md'
     requirement = 'BlackBear shall error when the interstitial species of a cellular network model is ambiguous.'
   []
-  [defect_dynamics_loop_transfer_action]
-    type = CSVDiff
-    input = defect_dynamics_loop_transfer_action.i
-    csvdiff = 'defect_dynamics_loop_transfer_action_out.csv'
-    design = 'DefectRecoveryAction.md LoopNetworkTransferNodalKernel.md CellularNetworkDislocationDensity.md'
-    requirement = 'BlackBear shall remove the interstitial loops of a Fokker-Planck cluster distribution at the rate at which they join the cellular dislocation network, and add the line length they carry to the network density, when [Recovery] sets loop_transfer = true.'
-  []
-  [defect_dynamics_loop_transfer_grouped_error]
-    type = RunException
-    input = defect_dynamics_loop_transfer_grouped_error.i
-    expect_err = "loop_transfer = true needs tail = fokker_planck"
-    design = 'DefectRecoveryAction.md'
-    requirement = 'BlackBear shall error when [Recovery] sets loop_transfer = true without the Fokker-Planck continuum tail.'
-  []
-  [defect_dynamics_loop_transfer_pokor_error]
-    type = RunException
-    input = defect_dynamics_loop_transfer_action.i
-    cli_args = "DefectDynamics/Recovery/model=pokor DefectDynamics/Recovery/K=1e7"
-    expect_err = "is only used with model = cellular_network"
-    design = 'DefectRecoveryAction.md'
-    requirement = 'BlackBear shall error when [Recovery] sets loop_transfer, bias or the other cellular network parameters with model = pokor.'
-  []
   [defect_dynamics_recovery_dislocation_density_warning]
     type = RunApp
     input = defect_dynamics_recovery_action.i

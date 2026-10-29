@@ -199,36 +199,6 @@ DefectDynamicsAction::recovery() const
   return recoveries[0];
 }
 
-const DefectSpeciesAction *
-DefectDynamicsAction::networkLoopSpecies(const DefectRecoveryAction & recovery) const
-{
-  const DefectSpeciesAction * loops = nullptr;
-  if (recovery.isParamValid("interstitial_species"))
-  {
-    const auto wanted = recovery.getParam<std::string>("interstitial_species");
-    for (const auto * sp : species())
-      if (sp->name() == wanted)
-        loops = sp;
-    if (!loops)
-      mooseError("[Recovery] interstitial_species '", wanted, "' is not a species sub-block.");
-  }
-  else
-    for (const auto * sp : species())
-      if (sp->getParam<MooseEnum>("geometry") == "loop")
-      {
-        if (loops)
-          mooseError("[Recovery] model = cellular_network found two species with geometry = "
-                     "loop; name the interstitial one with interstitial_species.");
-        loops = sp;
-      }
-  if (!loops)
-    mooseError("[Recovery] model = cellular_network needs a species with geometry = loop, whose "
-               "monomer concentration drives the network.");
-  if (loops->getParam<MooseEnum>("geometry") != "loop")
-    mooseError("[Recovery] interstitial_species must have geometry = loop.");
-  return loops;
-}
-
 std::vector<const DefectSpeciesAction *>
 DefectDynamicsAction::species() const
 {
@@ -914,28 +884,6 @@ DefectDynamicsAction::actAddNodalKernels()
       _problem->addNodalKernel(
           "DislocationRecoveryNodalKernel", sp->name() + "_recovery", params);
     }
-
-    if (recovery_action->cellularNetwork() && recovery_action->getParam<bool>("loop_transfer"))
-    {
-      if (!usesContinuumTail())
-        mooseError("[Recovery] loop_transfer = true needs tail = fokker_planck: the line length of "
-                   "the loops that join the network is summed over the continuum layout.");
-      const auto * loops = networkLoopSpecies(*recovery_action);
-      InputParameters params = _factory.getValidParams("LoopNetworkTransferNodalKernel");
-      params.set<NonlinearVariableName>("variable") = variableName(*loops);
-      params.set<PostprocessorName>("dislocation_density_postprocessor") =
-          name() + "_network_density";
-      params.set<Real>("D0") = loops->getParam<Real>("D0");
-      params.set<Real>("Em_eV") = loops->getParam<Real>("Em");
-      params.set<Real>("temperature") = temperature;
-      params.set<Real>("burgers_vector") = recovery_action->getParam<Real>("burgers_vector");
-      params.set<Real>("bias") = recovery_action->getParam<Real>("bias");
-      params.set<Real>("ca_crho") = recovery_action->getParam<Real>("ca_crho");
-      params.set<Real>("poisson_ratio") = recovery_action->getParam<Real>("poisson_ratio");
-      params.set<unsigned int>("minimum_size") =
-          recovery_action->getParam<unsigned int>("transfer_minimum_size");
-      _problem->addNodalKernel("LoopNetworkTransferNodalKernel", loops->name() + "_network_transfer", params);
-    }
   }
 
   for (const auto * sp : sp_list)
@@ -996,7 +944,30 @@ DefectDynamicsAction::actAddPostprocessors()
   if (cellular)
   {
     // Rest (2006): the network density is driven by the interstitial loop species' monomers
-    const DefectSpeciesAction * loops = networkLoopSpecies(*recovery_action);
+    const DefectSpeciesAction * loops = nullptr;
+    if (recovery_action->isParamValid("interstitial_species"))
+    {
+      const auto wanted = recovery_action->getParam<std::string>("interstitial_species");
+      for (const auto * sp : species())
+        if (sp->name() == wanted)
+          loops = sp;
+      if (!loops)
+        mooseError("[Recovery] interstitial_species '", wanted, "' is not a species sub-block.");
+    }
+    else
+      for (const auto * sp : species())
+        if (sp->getParam<MooseEnum>("geometry") == "loop")
+        {
+          if (loops)
+            mooseError("[Recovery] model = cellular_network found two species with geometry = "
+                       "loop; name the interstitial one with interstitial_species.");
+          loops = sp;
+        }
+    if (!loops)
+      mooseError("[Recovery] model = cellular_network needs a species with geometry = loop, whose "
+                 "monomer concentration drives the network.");
+    if (loops->getParam<MooseEnum>("geometry") != "loop")
+      mooseError("[Recovery] interstitial_species must have geometry = loop.");
     InputParameters params = _factory.getValidParams("CellularNetworkDislocationDensity");
     params.set<PostprocessorName>("interstitial_concentration") =
         loops->name() + "_monomer_concentration";
@@ -1010,32 +981,6 @@ DefectDynamicsAction::actAddPostprocessors()
     params.set<Real>("ca_crho") = recovery_action->getParam<Real>("ca_crho");
     params.set<Real>("poisson_ratio") = recovery_action->getParam<Real>("poisson_ratio");
     params.set<Real>("grain_size") = recovery_action->getParam<Real>("grain_size");
-    if (recovery_action->getParam<bool>("loop_transfer"))
-    {
-      if (!usesContinuumTail())
-        mooseError("[Recovery] loop_transfer = true needs tail = fokker_planck: the line length of "
-                   "the loops that join the network is summed over the continuum layout.");
-      // The loops that join the network: all loops from transfer_minimum_size up, counted with the
-      // same layout as the cluster variable, so that the line length removed by
-      // LoopNetworkTransferNodalKernel is exactly the line length added here
-      Real r1, radius_exponent;
-      loops->monomerRadiusLaw(atomic_volume, getParam<Real>("lattice_parameter"), r1, radius_exponent);
-      InputParameters line = _factory.getValidParams("ClusterContinuumMoment");
-      line.set<std::vector<VariableName>>("clusters") = {variableName(*loops)};
-      line.set<MooseEnum>("quantity") = "line_length";
-      line.set<unsigned int>("num_cluster_sizes") =
-          loops->resolvedNumClusterSizes(atomic_volume, getParam<Real>("lattice_parameter"));
-      line.set<unsigned int>("switch_size") = getParam<unsigned int>("switch_size");
-      line.set<Real>("continuum_initial_width") = getParam<Real>("continuum_initial_width");
-      line.set<Real>("continuum_width_ratio") = getParam<Real>("continuum_width_ratio");
-      line.set<unsigned int>("n_minimum") = recovery_action->getParam<unsigned int>("transfer_minimum_size");
-      line.set<Real>("atomic_volume") = atomic_volume;
-      line.set<Real>("r1") = r1;
-      line.set<Real>("radius_exponent") = radius_exponent;
-      line.set<ExecFlagEnum>("execute_on") = {EXEC_INITIAL, EXEC_TIMESTEP_END};
-      _problem->addPostprocessor("ClusterContinuumMoment", name() + "_network_line_length", line);
-      params.set<PostprocessorName>("line_length_postprocessor") = name() + "_network_line_length";
-    }
     _problem->addPostprocessor("CellularNetworkDislocationDensity", name() + "_network_density", params);
   }
 

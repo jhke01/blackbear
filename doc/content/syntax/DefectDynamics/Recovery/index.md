@@ -9,8 +9,7 @@ network model of [!cite](rest2006) (`cellular_network`). See [DefectRecoveryActi
 ## Constructed Objects
 
 This block holds only parameters. [DefectDynamics](syntax/DefectDynamics/index.md) reads them and adds one [GenericDislocationRecoveryNodalKernel.md]
-for each species and, with `model = cellular_network`, a [CellularNetworkDislocationDensity.md] postprocessor, and with `loop_transfer = true` a
-[LoopNetworkTransferNodalKernel.md].
+for each species and, with `model = cellular_network`, a [CellularNetworkDislocationDensity.md] postprocessor.
 
 ## Example Input Syntax
 

@@ -28,10 +28,6 @@
  * DefectDynamicsAction builds from the interstitial loop species' monomer concentration; K is then
  * not used.
  *
- * With loop_transfer = true the interstitial loops of the cluster distribution themselves join the
- * network (LoopNetworkTransferNodalKernel removes them, and the line length they carry is the source of
- * the network density) instead of the steady-state loop source of Rest's Eq 18.
- *
  * Holds no logic of its own beyond validating its parameters; it exists so DefectDynamicsAction can
  * look it up (ActionWarehouse::getActions<DefectRecoveryAction>()) and read them while building the
  * DislocationRecoveryNodalKernel instances.

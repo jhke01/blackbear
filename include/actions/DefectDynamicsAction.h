@@ -86,10 +86,6 @@ protected:
   /// This block's optional [Recovery] sub-block, or nullptr if none was given (zero is the
   /// normal, default-off case; more than one is an error).
   const DefectRecoveryAction * recovery() const;
-
-  /// The interstitial loop species that drives a cellular network dislocation density
-  /// ([Recovery] model = cellular_network)
-  const DefectSpeciesAction * networkLoopSpecies(const DefectRecoveryAction & recovery) const;
   /// This block's species sub-blocks (one or two), sorted by block name.
   std::vector<const DefectSpeciesAction *> species() const;
 

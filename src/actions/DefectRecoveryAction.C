@@ -60,20 +60,6 @@ DefectRecoveryAction::validParams()
                         0.0,
                         "Grain size d_g [m] of the grain-boundary loss 4 v_l rho/d_g, "
                         "model = cellular_network only. 0 turns the term off.");
-  params.addParam<bool>(
-      "loop_transfer",
-      false,
-      "model = cellular_network only. If true, the loops of the interstitial species join the network "
-      "at the rate k = v_l / L (L is the cell size of Rest's Eq 10) and carry their line length into "
-      "the network density: LoopNetworkTransferNodalKernel removes them from the size distribution "
-      "and the network density gains their line length. This removes the double counting of line "
-      "length between the explicit loops and the network. If false, the network is fed by the "
-      "steady-state loop density of Rest's Eq 18 and the explicit loops are not affected.");
-  params.addRangeCheckedParam<unsigned int>(
-      "transfer_minimum_size",
-      2,
-      "transfer_minimum_size >= 2",
-      "loop_transfer only: smallest loop size that can join the network.");
   params.addParam<std::string>(
       "interstitial_species",
       "Name of the species sub-block whose monomer concentration drives the network, "
@@ -97,16 +83,13 @@ DefectRecoveryAction::DefectRecoveryAction(const InputParameters & params) : Act
       paramError("poisson_ratio", "must be in [0, 1).");
     if (getParam<Real>("grain_size") < 0.0)
       paramError("grain_size", "must not be negative.");
-    if (!getParam<bool>("loop_transfer") && parameters().isParamSetByUser("transfer_minimum_size"))
-      paramError("transfer_minimum_size", "is only used with loop_transfer = true.");
   }
   else
   {
     if (!isParamValid("K"))
       paramError("K", "is required with model = pokor.");
-    for (const auto & name :
-         {"bias", "interstitial_species", "loop_transfer", "transfer_minimum_size"})
-      if (parameters().isParamSetByUser(name))
+    for (const auto & name : {"bias", "interstitial_species"})
+      if (isParamValid(name))
         paramError(name, "is only used with model = cellular_network.");
   }
 }

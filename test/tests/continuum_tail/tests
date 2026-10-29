@@ -25,14 +25,6 @@
     design = 'ClusterContinuumMoment.md'
     requirement = 'BlackBear shall compute the number density, the point-defect content and the mean radius of a cluster size distribution that is discrete up to a switch size and a continuum above it, with a minimum cluster size that cuts a continuum cell at the lower edge of that size, so that a constant concentration per unit size gives the exact values.'
   []
-  [loop_network_transfer_jacobian]
-    type = PetscJacobianTester
-    input = loop_network_transfer_jacobian.i
-    run_sim = True
-    ratio_tol = 1e-7
-    design = 'LoopNetworkTransferNodalKernel.md'
-    requirement = 'BlackBear shall provide a Jacobian, including the column of the monomer, for the loss of loops to the dislocation network at a rate that is proportional to the monomer concentration.'
-  []
   [continuum_loop_observables]
     type = CSVDiff
     input = continuum_loop_observables.i
