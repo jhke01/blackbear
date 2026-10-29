@@ -40,8 +40,8 @@ SoluteClusterDynamicsAction::validParams()
       "A front end to ClusterDynamicsGroupedNodalKernel, the solute-clustering kernel (used for "
       "Cu precipitation, for example): builds the solute array variable, initial condition, "
       "time-derivative/dynamics kernel, and monomer/total-density postprocessors from the "
-      "physical parameters below instead of requiring [GroupedVariables]/[NodalKernels] to be "
-      "hand-typed. When a [DefectDynamics] block is also present in the same input, this action "
+      "physical parameters below instead of requiring `[GroupedVariables]`/`[NodalKernels]` to be "
+      "hand-typed. When a `[DefectDynamics]` block is also present in the same input, this action "
       "automatically couples the solute monomer diffusivity to that block's vacancy species "
       "(see vacancy_coupled_var on GenericClusterDynamicsGroupedNodalKernel) -- no separate "
       "switch is needed; declaring both blocks together activates concurrent point-defect "
@@ -207,9 +207,9 @@ SoluteClusterDynamicsAction::validParams()
       0.0,
       "If positive, adds a number-density and average-radius postprocessor pair "
       "(<name>_resolvable_density, <name>_resolvable_avg_radius) counting only clusters at or "
-      "above this radius [m] -- the smallest cluster resolvable by whatever characterization "
+      "above this radius, in m, -- the smallest cluster resolvable by whatever characterization "
       "technique the input is compared against (e.g. atom probe). Same name and meaning as "
-      "resolvable_radius on a [DefectDynamics] species. The radius is converted to a cluster size "
+      "resolvable_radius on a `[DefectDynamics]` species. The radius is converted to a cluster size "
       "with the same spherical law the solute kernel uses, r_n = (3 n V_at / 4 pi)^(1/3), "
       "using atomic_volume. Left at zero (the default), no such postprocessors are added.");
   params.addDeprecatedParam<unsigned int>(

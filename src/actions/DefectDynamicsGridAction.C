@@ -52,7 +52,7 @@ DefectDynamicsGridAction::DefectDynamicsGridAction(const InputParameters & param
       "[DefectDynamics/Grid] is deprecated: set use_grouping, explicit_max, group_spacing, "
       "group_linear_width, group_geometric_ratio, enforce_group_nonnegative and "
       "group_nonnegative_tolerance_factor inside each species sub-block instead. A value "
-      "a species sets itself takes priority over [Grid], which only supplies the values a "
+      "a species sets itself takes priority over `[Grid]`, which only supplies the values a "
       "species leaves unset.");
 }
 

@@ -81,8 +81,8 @@ DefectDynamicsAction::validParams()
   params.addParam<Real>(
       "dislocation_density",
       0.0,
-      "Dislocation density rho [m^-2] for the background sink, sink = D*Z*rho, applied to every "
-      "species' monomer. Defaults to zero, which turns the constant sink off. With a [Recovery] "
+      "Dislocation density rho, in m^-2, for the background sink, sink = D*Z*rho, applied to every "
+      "species' monomer. Defaults to zero, which turns the constant sink off. With a `[Recovery]` "
       "sub-block the sink instead comes entirely from the time-evolving dislocation density that "
       "block describes (Pokor et al. 2004, Eqs 7-8), and a nonzero dislocation_density is "
       "ignored with a warning.");

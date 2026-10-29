@@ -15,7 +15,7 @@ continuum above it, the representation of [ContinuumLoopNodalKernel.md]. The
   $r_n = r_1 n^p$ ([!param](/Postprocessors/ClusterContinuumMoment/r1) and
   [!param](/Postprocessors/ClusterContinuumMoment/radius_exponent)),
 - `line_length`, the dislocation line length per volume of a loop family, $\sum_n 2\pi r_n C_n / V_{at}$
-  [m$^{-2}$] ([!cite](rest2006), Eq. 9, $\rho = \pi n_l d_l$ with $d_l$ the loop diameter), or
+  in m$^{-2}$ ([!cite](rest2006), Eq. 9, $\rho = \pi n_l d_l$ with $d_l$ the loop diameter), or
 - `lattice_strain`, the relative change of the lattice parameter caused by the loops,
   $\frac{1}{3}\sum_n n C_n$ ([!cite](rest2006), Eq. 4, $\pi b n_l d_l^2 / 12$). For a loop of $n$ atoms,
   $r_n^2 = n V_{at} / (\pi b)$, so $\pi b\, r_n^2 = n V_{at}$ and Rest's expression is one third of the

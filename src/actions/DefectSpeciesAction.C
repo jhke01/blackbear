@@ -130,8 +130,8 @@ DefectSpeciesAction::validParams()
   params.addParam<Real>(
       "burgers_vector",
       0.0,
-      "Burgers vector b [m] for a loop's radius and bias laws. Defaults to "
-      "lattice_parameter/sqrt(3) (the enclosing [DefectDynamics] block's lattice_parameter) when "
+      "Burgers vector b, in m, for a loop's radius and bias laws. Defaults to "
+      "lattice_parameter/sqrt(3) (the enclosing `[DefectDynamics]` block's lattice_parameter) when "
       "left at zero (geometry = loop only).");
 
   params.addParam<MooseEnum>(

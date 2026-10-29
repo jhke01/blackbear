@@ -296,6 +296,79 @@ When no `[Recovery]` sub-block is given, a species' sink stays exactly the const
 has exactly one sink term per species, so `[Recovery]`, when present, replaces that constant
 contribution rather than adding to it.
 
+## Cellular Network Dislocation Density id=cellular-network
+
+With `model = cellular_network` in the `[Recovery]` sub-block ([DefectRecoveryAction.md]) the dislocation density is not a closed-form
+function of time but follows the network model of [!cite](rest2006), which was derived for the cellular dislocation network that forms in
+irradiated fuel. Interstitial loops climb to the network and add line length to it, and adjacent edge dislocations annihilate each other:
+
+!equation
+\frac{d\rho}{dt} = \pi v_l n_l - \frac{4 v_l}{d_g}\rho - v_l \frac{\sqrt{f(\nu)/\pi}}{C_A C_\rho}\rho^{3/2},
+\qquad v_l = \frac{2 Z_{iv} D_i c_i}{b}, \quad f(\nu) = \frac{1 - \nu/2}{1 - \nu}.
+
+Here $n_l$ is the interstitial loop density, $D_i c_i$ the interstitial diffusivity and monomer site fraction (the monomer of the loop species), $Z_{iv}$ the relative
+interstitial/vacancy bias ([!param](/DefectDynamics/Recovery/DefectRecoveryAction/bias)), $b$ the Burgers vector of the network,
+$d_g$ the grain size, $\nu$ the Poisson ratio, and $C_A C_\rho$ the geometric factor of the cells. The second term is the loss at grain boundaries (omitted when
+[!param](/DefectDynamics/Recovery/DefectRecoveryAction/grain_size) is 0; the paper states it can be neglected for the conditions it considers), and the third term is the self-annihilation.
+The dislocation sink of each species is $D Z \rho$ with this $\rho$, as in the previous section.
+
+### Loop density at steady state
+
+The loop density obeys $dn_l/dt = (\sqrt{2}/2) D_i c_i^2 / \Omega^{5/3} - v_l n_l / d_l$, where the first term is the nucleation of loops from di-interstitials and the second the loss of loops
+to the network, with $\rho = \pi n_l d_l$ relating the loop diameter $d_l$ to the line length. Setting the left side to zero gives
+
+!equation
+n_l = \left[\frac{\sqrt{2}\, b\, c_i\, \rho}{4 \pi Z_{iv}\Omega^{5/3}}\right]^{1/2},
+
+so $n_l \propto \sqrt{\rho}$. Substituting this into the equation for $\rho$ and writing $u = \sqrt{\rho}$, $n_l = k u$ with $k = [\sqrt{2} b c_i / (4 \pi Z_{iv}\Omega^{5/3})]^{1/2}$ gives
+
+!equation
+\frac{du}{dt} = \frac{\pi v_l k}{2} - \frac{2 v_l}{d_g} u - \frac{C v_l}{2} u^2, \qquad C = \frac{\sqrt{f(\nu)/\pi}}{C_A C_\rho},
+
+a Riccati equation. For constant coefficients $du/dt = c - \beta u - a u^2 = -a(u - u_+)(u - u_-)$, and $w = (u - u_+)/(u - u_-)$ satisfies
+$dw/dt = -\sqrt{\beta^2 + 4 a c}\, w$, so the solution over a step is exact. [CellularNetworkDislocationDensity.md] advances $\rho$ this way at the end of each step with $c_i$ at the mean of its values at the two ends
+of the step. It cannot become negative. Because the density is read by the sink kernels as it stands at the end of the previous step, the coupling is lagged. For the cases tried,
+changing [!param](/DefectDynamics/DefectDynamicsAction/timestep_relative_change) from 0.1 to 0.03 and 0.01 did not change the result by more than 0.01 percent in the density, so
+the default is enough there; this was not tested where $c_i$ changes much faster.
+
+### Loop transfer (experimental)
+
+In the steady-state form, the loops that feed the network are the ones of Rest's separate loop equation, and the loops of the cluster-size distribution do not lose any line length when the network gains it.
+In the cluster dynamics the loops keep growing, so the same line length is counted twice. With [!param](/DefectDynamics/Recovery/DefectRecoveryAction/loop_transfer) the loops of the cluster
+distribution themselves join the network, at the rate at which a loop climbing at $v_l$ covers the distance $L = C_A C_\rho \sqrt{\pi/(\rho f(\nu))}$ between cell walls:
+
+!equation
+k = \frac{v_l}{L} = v_l \frac{\sqrt{f(\nu)/\pi}}{C_A C_\rho}\sqrt{\rho}, \qquad
+\frac{d\rho}{dt} = k\,(L_{\mathrm{loops}} - \rho) - \frac{4 v_l}{d_g}\rho,
+
+where $L_{\mathrm{loops}} = \sum_n 2\pi r_n C_n / V_{at}$ is the line length of the loops that join, and $k\rho$ is the self-annihilation term above.
+[LoopNetworkTransferNodalKernel.md] removes every loop of at least [!param](/DefectDynamics/Recovery/DefectRecoveryAction/transfer_minimum_size) from the distribution at the rate $k$, the same for every size.
+
+!alert warning title=The transfer rate is an assumption
+[!cite](rest2006) has one loop population whose diameter is tied to the cell size and does not say how loops of many sizes join the network. A rate that is the same for every loop above a
+minimum size is a choice of this implementation. In the SUNDIALS reference implementation of the same equations the result depends on it, and at 673 K it depends on the starting density (see below).
+
+### What has been checked, and what has not
+
+All numbers are from one set of parameters (SA304 steel in the OSIRIS reactor, Pokor et al. Table 5 and 6), one machine, with $Z_{iv}$ and $C_A C_\rho$ assumed.
+
+- The exact step agrees with an ODE integration at a relative tolerance of $10^{-12}$ to better than $3 \times 10^{-14}$.
+- Against the same equations in the SUNDIALS Pokor benchmark with matched physics (no grain-boundary sink in the monomer balance, the 2/1 dimer bookkeeping), the density and the cluster
+  observables agree within 0.2 percent (steady-state source) and within 0.5 and 0.6 percent (loop transfer) over 0.01 to 10 dpa at 603 K. This checks the implementation of the equations, not their physics.
+- At 603 K and 10 dpa, from an initial density of $10^{10}$ m$^{-2}$ with $Z_{iv} = 0.1$ and $C_A C_\rho = 2$, the density is $1.4 \times 10^{14}$ m$^{-2}$ (steady-state source) and
+  $1.4 \times 10^{15}$ m$^{-2}$ (loop transfer). Pokor's law gives $2 \times 10^{9}$ m$^{-2}$. The model changes the sign of the trend as well as the size.
+- The values of $Z_{iv}$ (0.1 and 0.01 were used; [!cite](rest2006) gives $5 \times 10^{-4}$ for UO$_2$) and of $C_A C_\rho$ (2 and 3) are not known for steel. Results change by a factor of 10 or
+  more between $Z_{iv} = 0.1$ and 0.01, and by 17 percent in the loop-transfer density at 10 dpa between $C_A C_\rho = 2$ and 3.
+- With loop transfer at 573 K and 623 K, initial densities of $10^{10}$ and $10^{15}$ m$^{-2}$ end within a factor of 1.6 of each other at 3 dpa (1.53 at 573 K, 1.07 at 623 K). At 673 K ($Z_{iv} = 0.1$) there is a critical initial
+  density between $3 \times 10^{11}$ and $6 \times 10^{11}$ m$^{-2}$: below it the density falls, above it every start reaches $6 \times 10^{13}$ m$^{-2}$. The cause was not established.
+- No dislocation-density data of a steel were compared with the model.
+
+### Line length and lattice strain from the loop population
+
+[ClusterContinuumMoment.md] can report, for a loop family, the line length per volume $\sum_n 2\pi r_n C_n / V_{at}$ (the loop diameter in $\rho = \pi n_l d_l$) and
+the relative change of the lattice parameter $\Delta a / a_0 = \pi b n_l d_l^2 / 12$ ([!cite](rest2006)). With $r_n^2 = n V_{at}/(\pi b)$ the second is $\tfrac{1}{3}\sum_n n C_n$, one third of the volume fraction of
+the atoms in loops. It assumes that each loop atom adds its atomic volume to the crystal and ignores other sources of strain; the sign is the opposite for vacancy loops, for which it should not be used.
+
 ## Cascade Spectrum
 
 Every monomer-only input to this model puts the entire generation rate $G$ (dpa_rate times

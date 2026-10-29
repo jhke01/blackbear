@@ -93,7 +93,7 @@ names a `[DefectDynamics]` species uses:
 depend on the grouping of any `[DefectDynamics]` species.
 
 [!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/resolvable_radius) works as it does on
-a `[DefectDynamics]` species. It gives the smallest cluster radius [m] that a characterization
+a `[DefectDynamics]` species. It gives the smallest cluster radius, in m, that a characterization
 technique can see, and adds the outputs `<name>_resolvable_density` and
 `<name>_resolvable_avg_radius`, which count only clusters at or above that radius. It needs
 [!param](/SoluteClusterDynamics/SoluteClusterDynamicsAction/atomic_volume) to convert the radius to
