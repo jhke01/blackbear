@@ -65,6 +65,8 @@ protected:
   // specialization is a plain no-op member, never invoked by the framework, matching the
   // non-AD-only limitation documented in the class comment above.
   virtual void computeQpOffDiagJacobian(unsigned int jvar);
+  /// Cross-variable Jacobian block against the opposite array; see the definition
+  void assembleOppositeBlock(const std::vector<dof_id_type> * opposite_dofs);
 
   Derived & derived() { return static_cast<Derived &>(*this); }
   const Derived & derived() const { return static_cast<const Derived &>(*this); }
@@ -111,6 +113,8 @@ protected:
 
   const ArrayVariableValue & _opposite_array;
   const unsigned int _opposite_var_num;
+  /// Write the cross-variable block from the own-variable Jacobian call (see the parameter)
+  const bool _assemble_opposite_in_own_block;
   /// Whether opposite_coupled_var was actually provided. When false, the opposite-side rate
   /// coefficients default to values that make every opposite-absorption term evaluate to exactly
   /// zero, so the kernel reduces to its self-reaction-only behavior without any extra branching
@@ -198,6 +202,17 @@ GenericDefectFamilyGroupedNodalKernel<Derived, is_ad>::validParams()
       "Relaxation factor for grouped nonnegativity enforcement. Endpoint concentrations are "
       "allowed down to -factor * L0 before limiting.");
 
+  params.addParam<bool>(
+      "assemble_opposite_jacobian_in_own_block",
+      false,
+      "EXPERIMENTAL. If true, the cross-variable Jacobian block against opposite_coupled_var is "
+      "written from this kernel's own-variable Jacobian call, using the other variable's dof "
+      "indices directly, instead of through computeQpOffDiagJacobian. Use it with an SMP "
+      "preconditioner that does NOT list the two variables in off_diag_row/off_diag_column: MOOSE "
+      "then sees no coupling between different variables and does not allocate a local block "
+      "for every pair of components of the whole system, while the assembled matrix still has "
+      "the full cross-species coupling.");
+
   params.addCoupledVar(
       "opposite_coupled_var",
       0.0,
@@ -277,6 +292,8 @@ GenericDefectFamilyGroupedNodalKernel<Derived, is_ad>::GenericDefectFamilyGroupe
                      _opposite_group_geometric_ratio),
     _opposite_array(this->coupledArrayValue("opposite_coupled_var")),
     _opposite_var_num(this->coupled("opposite_coupled_var")),
+    _assemble_opposite_in_own_block(
+        this->template getParam<bool>("assemble_opposite_jacobian_in_own_block")),
     _opposite_coupling_active(this->isCoupled("opposite_coupled_var"))
 {
   // Grouped and explicit components are coupled through the monomer and the inter-bin fluxes,
@@ -289,6 +306,13 @@ GenericDefectFamilyGroupedNodalKernel<Derived, is_ad>::GenericDefectFamilyGroupe
                                       this->_var.sys().number(),
                                       this->_var.number(),
                                       this->_var.count());
+  if (this->_tid == 0 && _opposite_coupling_active)
+    ClusterDynamics::checkOppositeCoupling(*this,
+                                           this->_fe_problem,
+                                           this->_var.sys().number(),
+                                           this->_var.number(),
+                                           _opposite_var_num,
+                                           _assemble_opposite_in_own_block);
 
   if (_group_nonnegative_tolerance_factor < 0.0)
     mooseError(this->type(), " requires group_nonnegative_tolerance_factor >= 0.");
@@ -636,6 +660,14 @@ GenericDefectFamilyGroupedNodalKernel<Derived, is_ad>::computeQpJacobian()
         setRow(bin.l1_component);
       }
     }
+
+    // Experimental: the cross-variable block, written from here with the other variable's dof
+    // indices, so that no off_diag_row/off_diag_column pair is needed in the preconditioner
+    if (_assemble_opposite_in_own_block && _opposite_coupling_active)
+    {
+      const auto & opposite_dofs = this->getVariable(_opposite_var_num).dofIndices();
+      assembleOppositeBlock(&opposite_dofs);
+    }
   }
 }
 
@@ -658,6 +690,28 @@ GenericDefectFamilyGroupedNodalKernel<Derived, is_ad>::computeQpOffDiagJacobian(
   {
     if (jvar != _opposite_var_num)
       return;
+    // In the experimental mode the block is written from the own-variable call instead
+    if (_assemble_opposite_in_own_block)
+      return;
+    assembleOppositeBlock(nullptr);
+  }
+}
+
+// Writes the cross-variable block against the opposite array. With opposite_dofs == nullptr the
+// entries go through ArrayNodalKernel::setJacobian (own rows, the framework's column indices for
+// the coupled variable). Otherwise they are added directly with global row and column indices:
+// rows from this kernel's variable, columns from opposite_dofs.
+template <typename Derived, bool is_ad>
+void
+GenericDefectFamilyGroupedNodalKernel<Derived, is_ad>::assembleOppositeBlock(
+    const std::vector<dof_id_type> * opposite_dofs)
+{
+  if constexpr (is_ad)
+  {
+    return;
+  }
+  else
+  {
 
     derived().ensureCoefficientCache();
     derived().ensureOppositeCoefficientCache();
@@ -729,7 +783,14 @@ GenericDefectFamilyGroupedNodalKernel<Derived, is_ad>::computeQpOffDiagJacobian(
     {
       for (const auto column : row_columns)
       {
-        setJacobian(row, column, row_values[column]);
+        if (opposite_dofs)
+          this->addJacobianElement(this->_assembly,
+                                   row_values[column],
+                                   this->_var.dofIndices()[row],
+                                   (*opposite_dofs)[column],
+                                   this->_var.arrayScalingFactor()[row]);
+        else
+          setJacobian(row, column, row_values[column]);
         row_values[column] = 0.0;
         row_touched[column] = false;
       }

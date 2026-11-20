@@ -29,6 +29,12 @@ PointDefectRecombinationNodalKernel::validParams()
       "Recombination rate coefficient [m^3/s], 4*pi*r_rec*(D_i+D_v)/V_at.");
   params.addRequiredCoupledVar(
       "coupled_var", "The other defect family's grouped array variable.");
+  params.addParam<bool>(
+      "assemble_opposite_jacobian_in_own_block",
+      false,
+      "EXPERIMENTAL. If true, the cross-variable Jacobian entry against coupled_var is written "
+      "from this kernel's own-variable Jacobian call, using the other variable's dof indices, "
+      "so that the preconditioner needs no off_diag_row/off_diag_column pair.");
   return params;
 }
 
@@ -37,7 +43,8 @@ PointDefectRecombinationNodalKernel::PointDefectRecombinationNodalKernel(
   : ArrayNodalKernel(parameters),
     _recombination_rate(getParam<Real>("recombination_rate")),
     _coupled_monomer(coupledArrayValue("coupled_var")),
-    _coupled_var_num(coupled("coupled_var"))
+    _coupled_var_num(coupled("coupled_var")),
+    _assemble_in_own_block(getParam<bool>("assemble_opposite_jacobian_in_own_block"))
 {
   if (_recombination_rate < 0.0)
     mooseError("PointDefectRecombinationNodalKernel requires recombination_rate >= 0.");
@@ -59,12 +66,18 @@ void
 PointDefectRecombinationNodalKernel::computeQpJacobian()
 {
   setJacobian(0, 0, _recombination_rate * _coupled_monomer[_qp](0));
+  if (_assemble_in_own_block)
+    addJacobianElement(_assembly,
+                       _recombination_rate * _u[_qp](0),
+                       _var.dofIndices()[0],
+                       getVariable(_coupled_var_num).dofIndices()[0],
+                       _var.arrayScalingFactor()[0]);
 }
 
 void
 PointDefectRecombinationNodalKernel::computeQpOffDiagJacobian(unsigned int jvar)
 {
-  if (jvar != _coupled_var_num)
+  if (jvar != _coupled_var_num || _assemble_in_own_block)
     return;
 
   setJacobian(0, 0, _recombination_rate * _u[_qp](0));

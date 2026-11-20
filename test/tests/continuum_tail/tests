@@ -18,6 +18,19 @@
     design = 'ContinuumLoopNodalKernel.md'
     requirement = 'BlackBear shall provide a Jacobian, including the off-diagonal blocks, for two coupled discrete-plus-continuum loop families that shrink by absorbing each other\'s monomers, that agrees with a finite difference of the residual.'
   []
+  [continuum_pair_own_block_jacobian]
+    # The same input with the cross-variable block written from the own-variable call of each kernel and no off_diag pair
+    # in the preconditioner (SMP full = false); without the setting this input gives a ratio of about 0.85
+    type = PetscJacobianTester
+    input = continuum_pair_jacobian.i
+    cli_args = "Preconditioning/smp/full=false NodalKernels/vacancy_dyn/assemble_opposite_jacobian_in_own_block=true NodalKernels/interstitial_dyn/assemble_opposite_jacobian_in_own_block=true"
+    run_sim = True
+    ratio_tol = 1e-7
+    difference_tol = 1e6
+    allow_warnings = false
+    design = 'ContinuumLoopNodalKernel.md'
+    requirement = 'BlackBear shall provide the same Jacobian for two coupled discrete-plus-continuum loop families when assemble_opposite_jacobian_in_own_block is set and the preconditioner does not couple the two variables, so that the Jacobian agrees with a finite difference of the residual.'
+  []
   [continuum_moments]
     type = CSVDiff
     input = continuum_moments.i

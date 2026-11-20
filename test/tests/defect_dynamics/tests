@@ -46,6 +46,18 @@
     design = 'PointDefectRecombinationNodalKernel.md'
     requirement = 'BlackBear shall provide an analytical on- and off-diagonal Jacobian for the PointDefectRecombinationNodalKernel that captures the recombination coupling between a vacancy-void and an interstitial-loop variable.'
   []
+  [point_defect_recombination_own_block_jacobian]
+    # The same input with the recombination entry written from the own-variable call of each recombination kernel and no
+    # off_diag pair (SMP full = false)
+    type = PetscJacobianTester
+    input = point_defect_recombination_jacobian.i
+    cli_args = "Preconditioning/smp/full=false NodalKernels/vacancy_recombination/assemble_opposite_jacobian_in_own_block=true NodalKernels/interstitial_recombination/assemble_opposite_jacobian_in_own_block=true"
+    run_sim = True
+    ratio_tol = 1e-7
+    allow_warnings = false
+    design = 'PointDefectRecombinationNodalKernel.md'
+    requirement = 'BlackBear shall provide the same analytical Jacobian for the PointDefectRecombinationNodalKernel when assemble_opposite_jacobian_in_own_block is set and the preconditioner does not couple the two variables, so that the Jacobian agrees with a finite difference of the residual.'
+  []
   [dislocation_recovery_jacobian]
     type = PetscJacobianTester
     input = dislocation_recovery_jacobian.i
@@ -281,6 +293,18 @@
     design = 'GenericVacancyVoidGroupedNodalKernel.md GenericInterstitialLoopGroupedNodalKernel.md'
     requirement = 'BlackBear shall provide an analytical on- and off-diagonal Jacobian for the opposite-species absorption terms coupling the VacancyVoidGroupedNodalKernel and InterstitialLoopGroupedNodalKernel.'
   []
+  [defect_dynamics_opposite_absorption_own_block_jacobian]
+    # The same input with the cross-variable block written from the own-variable call of each kernel and no
+    # off_diag pair in the preconditioner (SMP full = false); without the setting this input gives a ratio of 0.1 to 0.7
+    type = PetscJacobianTester
+    input = defect_dynamics_opposite_absorption_jacobian.i
+    cli_args = "Preconditioning/smp/full=false NodalKernels/vacancy_dyn/assemble_opposite_jacobian_in_own_block=true NodalKernels/interstitial_dyn/assemble_opposite_jacobian_in_own_block=true"
+    run_sim = True
+    ratio_tol = 1e-7
+    allow_warnings = false
+    design = 'GenericVacancyVoidGroupedNodalKernel.md GenericInterstitialLoopGroupedNodalKernel.md'
+    requirement = 'BlackBear shall provide the same analytical opposite-species absorption Jacobian for the VacancyVoidGroupedNodalKernel and InterstitialLoopGroupedNodalKernel when assemble_opposite_jacobian_in_own_block is set and the preconditioner does not couple the two variables, so that the Jacobian agrees with a finite difference of the residual without the memory of an off-diagonal preconditioner pair.'
+  []
 
   [defect_dynamics_two_loop_conservation]
     type = CSVDiff
@@ -423,6 +447,28 @@
     csvdiff = 'defect_dynamics_opposite_absorption_small_action_out.csv'
     design = 'DefectDynamicsAction.md'
     requirement = 'BlackBear shall build a two-species grouped cluster-dynamics problem coupled through opposite-species absorption from a [DefectDynamics] block without a point-defect recombination kernel when recombination_radius is not given, deriving every opposite-species kernel parameter (diffusivity, dislocation bias, grid) from the other species block instead of requiring it to be typed on both kernels.'
+  []
+  [defect_dynamics_fokker_planck_own_block_action]
+    # The same problem with the cross-variable Jacobian written from the own-variable call of each kernel and no off_diag pair
+    # in the preconditioner; it must reproduce the gold file of the input that lists the pair. With the setting off and the pair
+    # removed the output differs from that gold file by a relative 9.5, so this test fails if the cross-variable block is dropped.
+    type = CSVDiff
+    input = defect_dynamics_fokker_planck_action.i
+    cli_args = "DefectDynamics/assemble_opposite_jacobian_in_own_block=true Preconditioning/smp/off_diag_row= Preconditioning/smp/off_diag_column= Outputs/file_base=defect_dynamics_fokker_planck_action_out"
+    csvdiff = 'defect_dynamics_fokker_planck_action_out.csv'
+    # switch_size 20 is below the size at which the species become resolvable, which warns by design in this small problem
+    allow_warnings = true
+    design = 'DefectDynamicsAction.md ContinuumLoopNodalKernel.md'
+    requirement = 'BlackBear shall give the same solution for a two-species cluster-dynamics problem with a Fokker-Planck continuum tail when assemble_opposite_jacobian_in_own_block is set and the preconditioner does not list the two variables as when it does.'
+  []
+  [defect_dynamics_opposite_coupling_missing_warning]
+    type = RunException
+    input = defect_dynamics_opposite_absorption_small_action.i
+    cli_args = "Preconditioning/smp/full=false"
+    expect_err = "the preconditioner does not couple the two variables, so MOOSE never asks it for the cross-variable Jacobian"
+    allow_warnings = false
+    design = 'DefectDynamicsAction.md'
+    requirement = 'BlackBear shall warn when a kernel has an opposite_coupled_var, the preconditioner does not couple the two variables and assemble_opposite_jacobian_in_own_block is not set, because the cross-variable Jacobian is then missing.'
   []
   [defect_dynamics_opposite_absorption_disabled_action]
     type = CSVDiff

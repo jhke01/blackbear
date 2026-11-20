@@ -116,6 +116,16 @@ ContinuumLoopNodalKernel::validParams()
                         "Burgers vector of the opposite family's loops [m], which sets their "
                         "radius when they absorb this family's monomer. Defaults to burgers_vector "
                         "when zero.");
+  params.addParam<bool>(
+      "assemble_opposite_jacobian_in_own_block",
+      false,
+      "EXPERIMENTAL. If true, the cross-variable Jacobian block against opposite_coupled_var is "
+      "written from this kernel's own-variable Jacobian call, using the other variable's dof "
+      "indices directly, instead of through computeQpOffDiagJacobian. Use it with an SMP "
+      "preconditioner that does NOT list the two variables in off_diag_row/off_diag_column: MOOSE "
+      "then sees no coupling between different variables and does not allocate a local block for "
+      "every pair of components of the whole system, while the assembled matrix still has the full "
+      "cross-species coupling.");
   return params;
 }
 
@@ -154,6 +164,7 @@ ContinuumLoopNodalKernel::ContinuumLoopNodalKernel(const InputParameters & param
     _partner_alpha(isParamValid("partner_alpha") ? getParam<Real>("partner_alpha") : _alpha_loop),
     _opposite_array(coupledArrayValue("opposite_coupled_var")),
     _opposite_var_num(coupled("opposite_coupled_var")),
+    _assemble_opposite_in_own_block(getParam<bool>("assemble_opposite_jacobian_in_own_block")),
     _layout(getParam<unsigned int>("num_cluster_sizes"),
             getParam<unsigned int>("switch_size"),
             getParam<Real>("continuum_initial_width"),
@@ -185,6 +196,13 @@ ContinuumLoopNodalKernel::ContinuumLoopNodalKernel(const InputParameters & param
   {
     if (_opposite_var_num == _var.number())
       paramError("opposite_coupled_var", "must be the other point-defect family's variable.");
+    if (_tid == 0)
+      ClusterDynamics::checkOppositeCoupling(*this,
+                                             _fe_problem,
+                                             _var.sys().number(),
+                                             _var.number(),
+                                             _opposite_var_num,
+                                             _assemble_opposite_in_own_block);
     if (getParam<Real>("opposite_D0") <= 0.0)
       paramError("opposite_D0", "must be positive when opposite_coupled_var is given.");
     const unsigned int opposite_count = getArrayVar("opposite_coupled_var", 0)->count();
@@ -330,12 +348,30 @@ ContinuumLoopNodalKernel::computeQpJacobian()
   for (const auto & t : _triplets)
     if (t.column < _count)
       setJacobian(t.row, t.column, t.value);
+
+  // Experimental: the cross-variable block, from the same triplets (the columns at or above
+  // _count belong to the opposite family), written with the other variable's dof indices so that
+  // no off_diag_row/off_diag_column pair is needed in the preconditioner
+  if (_assemble_opposite_in_own_block && _opposite_active)
+  {
+    const auto & opposite_dofs = getVariable(_opposite_var_num).dofIndices();
+    for (const auto & t : _triplets)
+      if (t.column >= _count)
+        addJacobianElement(_assembly,
+                           t.value,
+                           _var.dofIndices()[t.row],
+                           opposite_dofs[t.column - _count],
+                           _var.arrayScalingFactor()[t.row]);
+  }
 }
 
 void
 ContinuumLoopNodalKernel::computeQpOffDiagJacobian(unsigned int jvar)
 {
   if (!_opposite_active || jvar != _opposite_var_num)
+    return;
+  // In the experimental mode the block is written from the own-variable call instead
+  if (_assemble_opposite_in_own_block)
     return;
 
   ensureCoefficients();

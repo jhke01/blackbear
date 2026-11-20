@@ -124,11 +124,38 @@ checkSolverSetup(const MooseObject & object,
             "of components of the whole system, which needs about ",
             bytes / 1.0e9,
             " GB however few pairs are coupled and is paid before the first solve. Reduce the "
-            "number of components (coarser grouping, a smaller maximum cluster size), or drop the "
-            "coupling between the arrays at the cost of an approximate Jacobian for it: use "
-            "full = false and leave the off_diag_row/off_diag_column pair out.");
+            "number of components (coarser grouping, a smaller maximum cluster size), or leave the "
+            "off_diag_row/off_diag_column pair out of the preconditioner (SMP with full = false) "
+            "and set assemble_opposite_jacobian_in_own_block = true, which keeps the exact "
+            "cross-variable Jacobian. Leaving the pair out WITHOUT that setting drops the "
+            "cross-variable Jacobian.");
     }
   }
+}
+
+void
+checkOppositeCoupling(const MooseObject & object,
+                      const FEProblemBase & problem,
+                      unsigned int nl_sys_num,
+                      unsigned int first_component,
+                      unsigned int opposite_first_component,
+                      bool assembled_in_own_block)
+{
+  if (assembled_in_own_block)
+    return;
+  const auto * cm = problem.couplingMatrix(nl_sys_num);
+  // No coupling matrix at all means every variable is coupled to every other one
+  if (!cm || (*cm)(first_component, opposite_first_component))
+    return;
+  object.mooseWarning(
+      "This kernel has opposite_coupled_var set, but the preconditioner does not couple the two "
+      "variables, so MOOSE never asks it for the cross-variable Jacobian and that block is "
+      "missing. The Newton iteration is then approximate: in the cases tested it needed several "
+      "times as many Newton iterations or time steps, and with a Fokker-Planck tail the results "
+      "differed from those with the exact Jacobian. Either list the pair in the preconditioner "
+      "(SMP, full = false, off_diag_row and off_diag_column naming the monomer components of the "
+      "two arrays), or set assemble_opposite_jacobian_in_own_block = true and leave the pair "
+      "out, which keeps the exact Jacobian without the memory cost of the pair.");
 }
 
 bool

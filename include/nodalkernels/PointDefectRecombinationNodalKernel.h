@@ -53,4 +53,7 @@ protected:
   const Real _recombination_rate;
   const ArrayVariableValue & _coupled_monomer;
   const unsigned int _coupled_var_num;
+  /// EXPERIMENTAL: write the cross-variable entry from the own-variable Jacobian call (see the
+  /// parameter of the same name)
+  const bool _assemble_in_own_block;
 };

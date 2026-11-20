@@ -97,6 +97,14 @@ DefectDynamicsAction::validParams()
       "below, is unaffected by this).");
 
   params.addParam<bool>(
+      "assemble_opposite_jacobian_in_own_block",
+      false,
+      "EXPERIMENTAL. Passed to the void, loop, continuum and recombination kernels: write their "
+      "cross-variable Jacobian block from their own-variable Jacobian call (see the kernels' "
+      "parameter of the same name), so that the preconditioner needs no "
+      "off_diag_row/off_diag_column pair for the two species and MOOSE does not allocate local "
+      "block storage for every pair of components of the whole system.");
+  params.addParam<bool>(
       "opposite_absorption",
       true,
       "Whether an interstitial monomer absorbed onto a void shrinks it, and a vacancy monomer "
@@ -552,6 +560,8 @@ DefectDynamicsAction::addContinuumKernel(const DefectSpeciesAction & sp,
     const Real default_b = lattice_parameter / std::sqrt(3.0);
 
     params.set<std::vector<VariableName>>("opposite_coupled_var") = {variableName(*opposite)};
+    params.set<bool>("assemble_opposite_jacobian_in_own_block") =
+        getParam<bool>("assemble_opposite_jacobian_in_own_block");
     params.set<MooseEnum>("opposite_geometry") = opposite->getParam<MooseEnum>("geometry");
     params.set<Real>("opposite_D0") = opposite->getParam<Real>("D0");
     params.set<Real>("opposite_Em_eV") = opposite->getParam<Real>("Em");
@@ -791,6 +801,8 @@ DefectDynamicsAction::actAddNodalKernels()
       params.set<Real>(is_void ? "Em_i_eV" : "Em_v_eV") = opposite->getParam<Real>("Em");
 
       params.set<std::vector<VariableName>>("opposite_coupled_var") = {variableName(*opposite)};
+      params.set<bool>("assemble_opposite_jacobian_in_own_block") =
+          getParam<bool>("assemble_opposite_jacobian_in_own_block");
       params.set<unsigned int>("opposite_num_cluster_sizes") =
           opposite->resolvedNumClusterSizes(atomic_volume, lattice_parameter);
       // The kernel rebuilds the PARTNER's array to sum its absorption (Piece B), so it must be
@@ -908,6 +920,8 @@ DefectDynamicsAction::actAddNodalKernels()
       params.set<NonlinearVariableName>("variable") = variableName(*sp);
       params.set<std::vector<VariableName>>("coupled_var") = {variableName(*opp)};
       params.set<Real>("recombination_rate") = recombination_rate;
+      params.set<bool>("assemble_opposite_jacobian_in_own_block") =
+          getParam<bool>("assemble_opposite_jacobian_in_own_block");
       _problem->addNodalKernel(
           "PointDefectRecombinationNodalKernel", sp->name() + "_recombination", params);
     }

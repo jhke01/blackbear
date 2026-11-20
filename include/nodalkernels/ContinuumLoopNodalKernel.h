@@ -97,6 +97,8 @@ protected:
   const Real _partner_alpha;
   const ArrayVariableValue & _opposite_array;
   const unsigned int _opposite_var_num;
+  /// Write the cross-variable Jacobian block from the own-variable Jacobian call (see the parameter)
+  const bool _assemble_opposite_in_own_block;
 
   const ClusterContinuumLayout _layout;
   const ClusterContinuumFlux _flux;

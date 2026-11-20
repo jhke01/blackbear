@@ -37,6 +37,24 @@ void checkSolverSetup(const MooseObject & object,
                       unsigned int n_components);
 
 /**
+ * Warn when a kernel with an opposite array variable would have its cross-variable Jacobian block
+ * dropped: the preconditioner's coupling matrix does not couple the two variables (so MOOSE never
+ * calls the kernel's off-diagonal Jacobian) and the kernel does not write the block from its own
+ * Jacobian call (assemble_opposite_jacobian_in_own_block).
+ *
+ * @param nl_sys_num nonlinear system number of the kernel's variable
+ * @param first_component variable number of the first component of the kernel's own array variable
+ * @param opposite_first_component variable number of the first component of the opposite array
+ * @param assembled_in_own_block the kernel's assemble_opposite_jacobian_in_own_block setting
+ */
+void checkOppositeCoupling(const MooseObject & object,
+                           const FEProblemBase & problem,
+                           unsigned int nl_sys_num,
+                           unsigned int first_component,
+                           unsigned int opposite_first_component,
+                           bool assembled_in_own_block);
+
+/**
  * Check the ordering used by the PETSc factorization that preconditions the cluster-dynamics
  * Jacobian. The Jacobian has a dense monomer row and column, so a factorization with the natural
  * ordering eliminates through that row first: a complete factorization then fills in to a dense
